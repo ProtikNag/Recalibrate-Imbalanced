@@ -107,3 +107,7 @@ logs/
 # HPC job output files (generalized)
 job*.out
 job*.err
+
+# Dataset
+dataset/
+concept/
