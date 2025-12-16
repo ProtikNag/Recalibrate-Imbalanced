@@ -1,0 +1,205 @@
+{
+  "experiment_name": "exp2_custom_cnn_zebra_20251216_062938",
+  "start_time": "2025-12-16T06:29:38.057965",
+  "sections": [
+    {
+      "title": "Environment Setup",
+      "timestamp": "2025-12-16T06:29:38.061283"
+    },
+    {
+      "title": "Dataset Loading",
+      "timestamp": "2025-12-16T06:29:38.061780"
+    },
+    {
+      "title": "Concept Loading",
+      "timestamp": "2025-12-16T06:29:38.134242"
+    },
+    {
+      "title": "Model Loading",
+      "timestamp": "2025-12-16T06:29:38.181781"
+    },
+    {
+      "title": "CAV Computation",
+      "timestamp": "2025-12-16T06:29:39.450783"
+    },
+    {
+      "title": "Evaluation BEFORE Recalibration",
+      "timestamp": "2025-12-16T06:31:57.150458"
+    },
+    {
+      "title": "Running Experiment 2",
+      "timestamp": "2025-12-16T06:32:41.995803"
+    },
+    {
+      "title": "Evaluation AFTER Recalibration",
+      "timestamp": "2025-12-16T06:46:38.419455"
+    },
+    {
+      "title": "Results Comparison",
+      "timestamp": "2025-12-16T06:47:04.381564"
+    },
+    {
+      "title": "Saving Results",
+      "timestamp": "2025-12-16T06:47:04.382436"
+    },
+    {
+      "title": "Generating Visualizations",
+      "timestamp": "2025-12-16T06:47:04.403533"
+    },
+    {
+      "title": "Experiment Summary",
+      "timestamp": "2025-12-16T06:47:08.289816"
+    }
+  ],
+  "config": {
+    "experiment": 2,
+    "model_name": "custom_cnn",
+    "model_path": null,
+    "pretrained": false,
+    "layer": "features.17",
+    "dataset_path": "./dataset",
+    "concept_path": "./concept",
+    "target_class": "zebra",
+    "concept": "stripes",
+    "imbalance_class": "zebra",
+    "imbalance_ratio": 0.1,
+    "epochs": 20,
+    "batch_size": 16,
+    "learning_rate": 0.0001,
+    "lambda_align": 0.5,
+    "classifier_type": "LinearSVC",
+    "seed": 42,
+    "results_path": "./results"
+  },
+  "results_before": {
+    "overall": {
+      "accuracy": 0.49158653846153844,
+      "precision": 0.1638621794871795,
+      "recall": 0.3333333333333333,
+      "f1": 0.21971528337362342,
+      "avg_confidence": 0.3366144001483917
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 0,
+        "wrong": 177,
+        "accuracy": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 177,
+        "true_negatives": 655,
+        "avg_confidence": 0.3364697992801666,
+        "conf_when_correct": 0,
+        "conf_when_wrong": 0.3364697992801666
+      },
+      "horse": {
+        "total": 246,
+        "correct": 0,
+        "wrong": 246,
+        "accuracy": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 246,
+        "true_negatives": 586,
+        "avg_confidence": 0.3367426097393036,
+        "conf_when_correct": 0,
+        "conf_when_wrong": 0.3367426097393036
+      },
+      "zebra": {
+        "total": 409,
+        "correct": 409,
+        "wrong": 0,
+        "accuracy": 1.0,
+        "precision": 0.49158653846153844,
+        "recall": 1.0,
+        "f1": 0.6591458501208703,
+        "true_positives": 409,
+        "false_positives": 423,
+        "false_negatives": 0,
+        "true_negatives": 0,
+        "avg_confidence": 0.33659985661506653,
+        "conf_when_correct": 0.33659985661506653,
+        "conf_when_wrong": 0
+      }
+    },
+    "tcav_score": 0.4215686321258545
+  },
+  "results_after": {
+    "overall": {
+      "accuracy": 0.6850961538461539,
+      "precision": 0.7778233215963538,
+      "recall": 0.5878933293083294,
+      "f1": 0.5784195147080419,
+      "avg_confidence": 0.3503509759902954
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 27,
+        "wrong": 150,
+        "accuracy": 0.15254237288135594,
+        "precision": 0.9642857142857143,
+        "recall": 0.15254237288135594,
+        "f1": 0.2634146341463415,
+        "true_positives": 27,
+        "false_positives": 1,
+        "false_negatives": 150,
+        "true_negatives": 654,
+        "avg_confidence": 0.3424833118915558,
+        "conf_when_correct": 0.3451395630836487,
+        "conf_when_wrong": 0.34200519323349
+      },
+      "horse": {
+        "total": 246,
+        "correct": 175,
+        "wrong": 71,
+        "accuracy": 0.7113821138211383,
+        "precision": 0.708502024291498,
+        "recall": 0.7113821138211383,
+        "f1": 0.7099391480730224,
+        "true_positives": 175,
+        "false_positives": 72,
+        "false_negatives": 71,
+        "true_negatives": 514,
+        "avg_confidence": 0.34884488582611084,
+        "conf_when_correct": 0.35128095746040344,
+        "conf_when_wrong": 0.34284061193466187
+      },
+      "zebra": {
+        "total": 409,
+        "correct": 368,
+        "wrong": 41,
+        "accuracy": 0.8997555012224939,
+        "precision": 0.6606822262118492,
+        "recall": 0.8997555012224939,
+        "f1": 0.761904761904762,
+        "true_positives": 368,
+        "false_positives": 189,
+        "false_negatives": 41,
+        "true_negatives": 234,
+        "avg_confidence": 0.35466164350509644,
+        "conf_when_correct": 0.3558042049407959,
+        "conf_when_wrong": 0.34440648555755615
+      }
+    },
+    "tcav_score": 0.4117647111415863
+  },
+  "comparison": {
+    "overall_change": {
+      "accuracy": 0.19350961538461542,
+      "precision": 0.6139611421091743,
+      "recall": 0.25455999597499607,
+      "f1": 0.3587042313344184,
+      "tcav": -0.009803920984268188
+    }
+  },
+  "end_time": "2025-12-16T06:47:08.290120",
+  "duration_seconds": 1050.232155
+}
