@@ -18,6 +18,8 @@ source activate /work/pnag/envs/ml_env/
 python --version
 
 cd /work/pnag/Recalibrate-Imbalanced/
+
+# Experiment 1: Target class only recalibration
 python main_experiment.py \
     --experiment 1 \
     --model_name custom_cnn \
@@ -28,8 +30,10 @@ python main_experiment.py \
     --concept_path ./concept \
     --imbalance_class zebra \
     --imbalance_ratio 0.05 \
-    --pretrain_epochs 30 \
-    --recalib_epochs 10
+    --pretrain_epochs 40 \
+    --recalib_epochs 20
+
+# Experiment 2: Full dataset with selective alignment
 python main_experiment.py \
     --experiment 2 \
     --model_name custom_cnn \
@@ -40,5 +44,17 @@ python main_experiment.py \
     --concept_path ./concept \
     --imbalance_class zebra \
     --imbalance_ratio 0.05 \
-    --pretrain_epochs 30 \
-    --recalib_epochs 10
+    --pretrain_epochs 40 \
+    --recalib_epochs 20
+
+# Experiment 3: Joint multi-class optimization with automatic layer selection
+python main_experiment.py \
+    --experiment 3 \
+    --model_name custom_cnn \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --class_concept_map "zebra:stripes,horse:horse_skin,deer:antlers" \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.05 \
+    --pretrain_epochs 40 \
+    --recalib_epochs 20
