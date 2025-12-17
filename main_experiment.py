@@ -141,7 +141,7 @@ class InitialTrainer:
         self.config = config
         self.logger = logger
 
-    def train(self, model, train_loader, val_loader, epochs=10, lr=1e-3):
+    def train(self, model, train_loader, val_loader, epochs=10, lr=1e-4):
         """
         Train model from scratch on imbalanced data.
         
@@ -301,7 +301,7 @@ class Experiment1Runner:
             lambda m: m.eval() if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d, nn.Dropout)) else None
         )
 
-    def train(self, target_loader, lambda_align=0.5, epochs=10, lr=1e-3):
+    def train(self, target_loader, lambda_align=0.5, epochs=10, lr=1e-4):
         """Recalibrate using only target class data."""
         lambda_cls = 1.0 - lambda_align
         optimizer = optim.Adam(
@@ -401,7 +401,7 @@ class Experiment2Runner:
             lambda m: m.eval() if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d, nn.Dropout)) else None
         )
 
-    def train(self, full_loader, lambda_align=0.5, epochs=10, lr=1e-3):
+    def train(self, full_loader, lambda_align=0.5, epochs=10, lr=1e-4):
         """Recalibrate using full dataset with selective alignment loss."""
         lambda_cls = 1.0 - lambda_align
         optimizer = optim.Adam(
