@@ -1,0 +1,210 @@
+{
+  "experiment_name": "exp2_custom_cnn_zebra_20251217_060817",
+  "start_time": "2025-12-17T06:08:17.688962",
+  "sections": [
+    {
+      "title": "Environment Setup",
+      "timestamp": "2025-12-17T06:08:17.691499"
+    },
+    {
+      "title": "Dataset Loading",
+      "timestamp": "2025-12-17T06:08:17.692234"
+    },
+    {
+      "title": "Concept Loading",
+      "timestamp": "2025-12-17T06:08:17.769524"
+    },
+    {
+      "title": "Model Initialization",
+      "timestamp": "2025-12-17T06:08:17.808352"
+    },
+    {
+      "title": "Phase 1: Initial Training on Imbalanced Data",
+      "timestamp": "2025-12-17T06:08:19.306900"
+    },
+    {
+      "title": "Phase 2: CAV Computation",
+      "timestamp": "2025-12-17T07:09:58.556024"
+    },
+    {
+      "title": "Phase 3: Evaluation BEFORE Recalibration",
+      "timestamp": "2025-12-17T07:10:55.413069"
+    },
+    {
+      "title": "Phase 4: Recalibration (Experiment 2)",
+      "timestamp": "2025-12-17T07:11:14.748238"
+    },
+    {
+      "title": "Phase 5: Evaluation AFTER Recalibration",
+      "timestamp": "2025-12-17T07:29:02.342437"
+    },
+    {
+      "title": "Results Comparison",
+      "timestamp": "2025-12-17T07:29:33.450909"
+    },
+    {
+      "title": "Saving Results and Generating Visualizations",
+      "timestamp": "2025-12-17T07:29:33.452000"
+    },
+    {
+      "title": "Experiment Summary",
+      "timestamp": "2025-12-17T07:29:37.961346"
+    }
+  ],
+  "config": {
+    "experiment": 2,
+    "model_name": "custom_cnn",
+    "model_path": null,
+    "pretrained": false,
+    "layer": "features.17",
+    "dataset_path": "./dataset",
+    "concept_path": "./concept",
+    "target_class": "zebra",
+    "concept": "stripes",
+    "class_concept_map": null,
+    "imbalance_class": "zebra",
+    "imbalance_ratio": 0.05,
+    "pretrain_epochs": 50,
+    "pretrain_lr": 0.0001,
+    "recalib_epochs": 20,
+    "recalib_lr": 0.0001,
+    "lambda_align": 0.5,
+    "batch_size": 64,
+    "classifier_type": "LinearSVC",
+    "seed": 42,
+    "results_path": "./results",
+    "epochs": null,
+    "learning_rate": null
+  },
+  "results_before": {
+    "overall": {
+      "accuracy": 0.9616252821670429,
+      "precision": 0.9494602188701569,
+      "recall": 0.8676702953470213,
+      "f1": 0.9002504590532467,
+      "avg_confidence": 0.9768397212028503
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 173,
+        "wrong": 4,
+        "accuracy": 0.9774011299435028,
+        "precision": 0.9402173913043478,
+        "recall": 0.9774011299435028,
+        "f1": 0.9584487534626038,
+        "true_positives": 173,
+        "false_positives": 11,
+        "false_negatives": 4,
+        "true_negatives": 255,
+        "avg_confidence": 0.9757212996482849,
+        "conf_when_correct": 0.9761433601379395,
+        "conf_when_wrong": 0.9574699997901917
+      },
+      "horse": {
+        "total": 246,
+        "correct": 240,
+        "wrong": 6,
+        "accuracy": 0.975609756097561,
+        "precision": 0.9795918367346939,
+        "recall": 0.975609756097561,
+        "f1": 0.9775967413441955,
+        "true_positives": 240,
+        "false_positives": 5,
+        "false_negatives": 6,
+        "true_negatives": 192,
+        "avg_confidence": 0.9849429130554199,
+        "conf_when_correct": 0.9862663745880127,
+        "conf_when_wrong": 0.9320032000541687
+      },
+      "zebra": {
+        "total": 20,
+        "correct": 13,
+        "wrong": 7,
+        "accuracy": 0.65,
+        "precision": 0.9285714285714286,
+        "recall": 0.65,
+        "f1": 0.7647058823529412,
+        "true_positives": 13,
+        "false_positives": 1,
+        "false_negatives": 7,
+        "true_negatives": 422,
+        "avg_confidence": 0.8870693445205688,
+        "conf_when_correct": 0.9284661412239075,
+        "conf_when_wrong": 0.8101897239685059
+      }
+    },
+    "tcav_score": 0.9019607901573181
+  },
+  "results_after": {
+    "overall": {
+      "accuracy": 0.9571106094808126,
+      "precision": 0.9209725748530387,
+      "recall": 0.9082540994901475,
+      "f1": 0.9144320648429014,
+      "avg_confidence": 0.9719363451004028
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 168,
+        "wrong": 9,
+        "accuracy": 0.9491525423728814,
+        "precision": 0.9491525423728814,
+        "recall": 0.9491525423728814,
+        "f1": 0.9491525423728814,
+        "true_positives": 168,
+        "false_positives": 9,
+        "false_negatives": 9,
+        "true_negatives": 257,
+        "avg_confidence": 0.9591234922409058,
+        "conf_when_correct": 0.967413604259491,
+        "conf_when_wrong": 0.804375946521759
+      },
+      "horse": {
+        "total": 246,
+        "correct": 240,
+        "wrong": 6,
+        "accuracy": 0.975609756097561,
+        "precision": 0.97165991902834,
+        "recall": 0.975609756097561,
+        "f1": 0.973630831643002,
+        "true_positives": 240,
+        "false_positives": 7,
+        "false_negatives": 6,
+        "true_negatives": 190,
+        "avg_confidence": 0.9880821704864502,
+        "conf_when_correct": 0.9900569915771484,
+        "conf_when_wrong": 0.9090900421142578
+      },
+      "zebra": {
+        "total": 20,
+        "correct": 16,
+        "wrong": 4,
+        "accuracy": 0.8,
+        "precision": 0.8421052631578947,
+        "recall": 0.8,
+        "f1": 0.8205128205128205,
+        "true_positives": 16,
+        "false_positives": 3,
+        "false_negatives": 4,
+        "true_negatives": 420,
+        "avg_confidence": 0.8867362141609192,
+        "conf_when_correct": 0.8800418376922607,
+        "conf_when_wrong": 0.9135138392448425
+      }
+    },
+    "tcav_score": 0.7156863212585449
+  },
+  "comparison": {
+    "overall_change": {
+      "accuracy": -0.004514672686230292,
+      "precision": -0.02848764401711812,
+      "recall": 0.04058380414312612,
+      "f1": 0.014181605789654661,
+      "tcav": -0.1862744688987732
+    }
+  },
+  "end_time": "2025-12-17T07:29:37.961654",
+  "duration_seconds": 4880.272692
+}

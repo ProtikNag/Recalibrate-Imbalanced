@@ -1,0 +1,210 @@
+{
+  "experiment_name": "exp1_custom_cnn_zebra_20251217_050408",
+  "start_time": "2025-12-17T05:04:08.444644",
+  "sections": [
+    {
+      "title": "Environment Setup",
+      "timestamp": "2025-12-17T05:04:08.448123"
+    },
+    {
+      "title": "Dataset Loading",
+      "timestamp": "2025-12-17T05:04:08.448789"
+    },
+    {
+      "title": "Concept Loading",
+      "timestamp": "2025-12-17T05:04:08.565504"
+    },
+    {
+      "title": "Model Initialization",
+      "timestamp": "2025-12-17T05:04:08.623747"
+    },
+    {
+      "title": "Phase 1: Initial Training on Imbalanced Data",
+      "timestamp": "2025-12-17T05:04:09.689591"
+    },
+    {
+      "title": "Phase 2: CAV Computation",
+      "timestamp": "2025-12-17T06:05:31.394320"
+    },
+    {
+      "title": "Phase 3: Evaluation BEFORE Recalibration",
+      "timestamp": "2025-12-17T06:06:17.116554"
+    },
+    {
+      "title": "Phase 4: Recalibration (Experiment 1)",
+      "timestamp": "2025-12-17T06:06:37.472302"
+    },
+    {
+      "title": "Phase 5: Evaluation AFTER Recalibration",
+      "timestamp": "2025-12-17T06:06:54.772766"
+    },
+    {
+      "title": "Results Comparison",
+      "timestamp": "2025-12-17T06:07:10.343065"
+    },
+    {
+      "title": "Saving Results and Generating Visualizations",
+      "timestamp": "2025-12-17T06:07:10.344002"
+    },
+    {
+      "title": "Experiment Summary",
+      "timestamp": "2025-12-17T06:07:14.698081"
+    }
+  ],
+  "config": {
+    "experiment": 1,
+    "model_name": "custom_cnn",
+    "model_path": null,
+    "pretrained": false,
+    "layer": "features.17",
+    "dataset_path": "./dataset",
+    "concept_path": "./concept",
+    "target_class": "zebra",
+    "concept": "stripes",
+    "class_concept_map": null,
+    "imbalance_class": "zebra",
+    "imbalance_ratio": 0.05,
+    "pretrain_epochs": 50,
+    "pretrain_lr": 0.0001,
+    "recalib_epochs": 20,
+    "recalib_lr": 0.0001,
+    "lambda_align": 0.5,
+    "batch_size": 64,
+    "classifier_type": "LinearSVC",
+    "seed": 42,
+    "results_path": "./results",
+    "epochs": null,
+    "learning_rate": null
+  },
+  "results_before": {
+    "overall": {
+      "accuracy": 0.9616252821670429,
+      "precision": 0.9494602188701569,
+      "recall": 0.8676702953470213,
+      "f1": 0.9002504590532467,
+      "avg_confidence": 0.9768397212028503
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 173,
+        "wrong": 4,
+        "accuracy": 0.9774011299435028,
+        "precision": 0.9402173913043478,
+        "recall": 0.9774011299435028,
+        "f1": 0.9584487534626038,
+        "true_positives": 173,
+        "false_positives": 11,
+        "false_negatives": 4,
+        "true_negatives": 255,
+        "avg_confidence": 0.9757212996482849,
+        "conf_when_correct": 0.9761433601379395,
+        "conf_when_wrong": 0.9574699997901917
+      },
+      "horse": {
+        "total": 246,
+        "correct": 240,
+        "wrong": 6,
+        "accuracy": 0.975609756097561,
+        "precision": 0.9795918367346939,
+        "recall": 0.975609756097561,
+        "f1": 0.9775967413441955,
+        "true_positives": 240,
+        "false_positives": 5,
+        "false_negatives": 6,
+        "true_negatives": 192,
+        "avg_confidence": 0.9849429130554199,
+        "conf_when_correct": 0.9862663745880127,
+        "conf_when_wrong": 0.9320032000541687
+      },
+      "zebra": {
+        "total": 20,
+        "correct": 13,
+        "wrong": 7,
+        "accuracy": 0.65,
+        "precision": 0.9285714285714286,
+        "recall": 0.65,
+        "f1": 0.7647058823529412,
+        "true_positives": 13,
+        "false_positives": 1,
+        "false_negatives": 7,
+        "true_negatives": 422,
+        "avg_confidence": 0.8870693445205688,
+        "conf_when_correct": 0.9284661412239075,
+        "conf_when_wrong": 0.8101897239685059
+      }
+    },
+    "tcav_score": 0.9019607901573181
+  },
+  "results_after": {
+    "overall": {
+      "accuracy": 0.8984198645598194,
+      "precision": 0.9327875039921029,
+      "recall": 0.6829452023333794,
+      "f1": 0.7183971283403244,
+      "avg_confidence": 0.9629979729652405
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 156,
+        "wrong": 21,
+        "accuracy": 0.8813559322033898,
+        "precision": 0.9069767441860465,
+        "recall": 0.8813559322033898,
+        "f1": 0.8939828080229226,
+        "true_positives": 156,
+        "false_positives": 16,
+        "false_negatives": 21,
+        "true_negatives": 250,
+        "avg_confidence": 0.9388400912284851,
+        "conf_when_correct": 0.9507864117622375,
+        "conf_when_wrong": 0.8500958681106567
+      },
+      "horse": {
+        "total": 246,
+        "correct": 238,
+        "wrong": 8,
+        "accuracy": 0.967479674796748,
+        "precision": 0.8913857677902621,
+        "recall": 0.967479674796748,
+        "f1": 0.9278752436647173,
+        "true_positives": 238,
+        "false_positives": 29,
+        "false_negatives": 8,
+        "true_negatives": 168,
+        "avg_confidence": 0.986895740032196,
+        "conf_when_correct": 0.9917283058166504,
+        "conf_when_wrong": 0.8431269526481628
+      },
+      "zebra": {
+        "total": 20,
+        "correct": 4,
+        "wrong": 16,
+        "accuracy": 0.2,
+        "precision": 1.0,
+        "recall": 0.2,
+        "f1": 0.33333333333333337,
+        "true_positives": 4,
+        "false_positives": 0,
+        "false_negatives": 16,
+        "true_negatives": 423,
+        "avg_confidence": 0.8828533887863159,
+        "conf_when_correct": 0.8539789915084839,
+        "conf_when_wrong": 0.8900719881057739
+      }
+    },
+    "tcav_score": 0.7450980544090271
+  },
+  "comparison": {
+    "overall_change": {
+      "accuracy": -0.06320541760722354,
+      "precision": -0.016672714878053996,
+      "recall": -0.18472509301364193,
+      "f1": -0.1818533307129223,
+      "tcav": -0.15686273574829102
+    }
+  },
+  "end_time": "2025-12-17T06:07:14.698410",
+  "duration_seconds": 3786.253766
+}
