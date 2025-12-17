@@ -28,7 +28,7 @@ python main_experiment.py \
     --concept_path ./concept \
     --imbalance_class zebra \
     --imbalance_ratio 0.05 \
-    --pretrain_epochs 30 \ 
+    --pretrain_epochs 30 \
     --recalib_epochs 10
 python main_experiment.py \
     --experiment 2 \
