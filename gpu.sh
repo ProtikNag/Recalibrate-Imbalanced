@@ -30,7 +30,7 @@ python main_experiment.py \
     --concept_path ./concept \
     --imbalance_class zebra \
     --imbalance_ratio 0.05 \
-    --pretrain_epochs 40 \
+    --pretrain_epochs 50 \
     --recalib_epochs 20
 
 # Experiment 2: Full dataset with selective alignment
@@ -44,7 +44,7 @@ python main_experiment.py \
     --concept_path ./concept \
     --imbalance_class zebra \
     --imbalance_ratio 0.05 \
-    --pretrain_epochs 40 \
+    --pretrain_epochs 50 \
     --recalib_epochs 20
 
 # Experiment 3: Joint multi-class optimization with automatic layer selection
@@ -56,5 +56,5 @@ python main_experiment.py \
     --class_concept_map "zebra:stripes,horse:horse_skin,deer:antlers" \
     --imbalance_class zebra \
     --imbalance_ratio 0.05 \
-    --pretrain_epochs 40 \
+    --pretrain_epochs 50 \
     --recalib_epochs 20

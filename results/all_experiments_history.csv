@@ -1,2 +1,0 @@
-timestamp,experiment,model_name,layer,target_class,concept,imbalance_class,imbalance_ratio,lambda_align,epochs,accuracy_before,accuracy_after,tcav_before,tcav_after,f1_before,f1_after
-2025-12-17T00:33:33.348936,2,custom_cnn,features.17,zebra,stripes,zebra,0.05,0.5,10,0.9146634615384616,0.9074519230769231,0.7843137383460999,0.8725490570068359,0.9091623221621847,0.9014562736559086

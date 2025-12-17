@@ -1453,7 +1453,7 @@ Examples:
     # Initial training hyperparameters
     parser.add_argument("--pretrain_epochs", type=int, default=30,
                         help="Number of epochs for initial training on imbalanced data")
-    parser.add_argument("--pretrain_lr", type=float, default=1e-3,
+    parser.add_argument("--pretrain_lr", type=float, default=1e-4,
                         help="Learning rate for initial training")
 
     # Recalibration hyperparameters
@@ -1465,7 +1465,7 @@ Examples:
                         help="Weight for alignment loss (0-1)")
 
     # General training parameters
-    parser.add_argument("--batch_size", type=int, default=16,
+    parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size for training")
 
     # CAV configuration
