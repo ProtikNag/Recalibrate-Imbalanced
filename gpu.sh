@@ -20,32 +20,32 @@ python --version
 cd /work/pnag/Recalibrate-Imbalanced/
 
 # Experiment 1: Target class only recalibration
-python main_experiment.py \
-    --experiment 1 \
-    --model_name custom_cnn \
-    --layer features.17 \
-    --target_class zebra \
-    --concept stripes \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --imbalance_class zebra \
-    --imbalance_ratio 0.05 \
-    --pretrain_epochs 50 \
-    --recalib_epochs 20
-
+#python main_experiment.py \
+#    --experiment 1 \
+#    --model_name custom_cnn \
+#    --layer features.17 \
+#    --target_class zebra \
+#    --concept stripes \
+#    --dataset_path ./dataset \
+#    --concept_path ./concept \
+#    --imbalance_class zebra \
+#    --imbalance_ratio 0.05 \
+#    --pretrain_epochs 50 \
+#    --recalib_epochs 20
+#
 # Experiment 2: Full dataset with selective alignment
-python main_experiment.py \
-    --experiment 2 \
-    --model_name custom_cnn \
-    --layer features.17 \
-    --target_class zebra \
-    --concept stripes \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --imbalance_class zebra \
-    --imbalance_ratio 0.05 \
-    --pretrain_epochs 50 \
-    --recalib_epochs 20
+#python main_experiment.py \
+#    --experiment 2 \
+#    --model_name custom_cnn \
+#    --layer features.17 \
+#    --target_class zebra \
+#    --concept stripes \
+#    --dataset_path ./dataset \
+#    --concept_path ./concept \
+#    --imbalance_class zebra \
+#    --imbalance_ratio 0.05 \
+#    --pretrain_epochs 50 \
+#    --recalib_epochs 20
 
 # Experiment 3: Joint multi-class optimization with automatic layer selection
 python main_experiment.py \

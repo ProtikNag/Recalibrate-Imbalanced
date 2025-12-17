@@ -38,7 +38,7 @@ class ResultVisualizer:
         # Color scheme
         self.colors = {
             'before': '#3498db',  # Blue
-            'after': '#2ecc71',  # Green
+            'after': '#2ecc71',   # Green
             'change_pos': '#27ae60',  # Dark green
             'change_neg': '#e74c3c',  # Red
             'highlight': '#f39c12',  # Orange
@@ -57,30 +57,30 @@ class ResultVisualizer:
 
         if 'train_loss' in loss_history:
             ax.plot(x, loss_history['train_loss'], 'b-o', linewidth=2,
-                    markersize=4, label='Train Loss')
+                   markersize=4, label='Train Loss')
             has_loss_plotted = True
         if 'val_loss' in loss_history:
             ax.plot(x, loss_history['val_loss'], 'r-s', linewidth=2,
-                    markersize=4, label='Val Loss')
+                   markersize=4, label='Val Loss')
             has_loss_plotted = True
         if 'loss' in loss_history and not has_loss_plotted:
             ax.plot(x, loss_history['loss'], 'b-o', linewidth=2,
-                    markersize=4, label='Loss')
+                   markersize=4, label='Loss')
             has_loss_plotted = True
         if 'total' in loss_history and not has_loss_plotted:
             ax.plot(x, loss_history['total'], 'b-o', linewidth=2,
-                    markersize=4, label='Total Loss')
+                   markersize=4, label='Total Loss')
             has_loss_plotted = True
         if 'cls' in loss_history:
             ax.plot(x, loss_history['cls'], 'orange', marker='s', linewidth=2,
-                    markersize=4, label='Classification Loss')
+                   markersize=4, label='Classification Loss')
 
         # Handle accuracy on secondary axis
         ax2 = None
         if 'train_acc' in loss_history:
             ax2 = ax.twinx()
             ax2.plot(x, loss_history['train_acc'], 'g--^', linewidth=2,
-                     markersize=4, label='Train Acc')
+                    markersize=4, label='Train Acc')
             ax2.set_ylabel('Accuracy', color='g')
             ax2.tick_params(axis='y', labelcolor='g')
             ax2.set_ylim(0, 1.1)
@@ -91,7 +91,7 @@ class ResultVisualizer:
                 ax2.tick_params(axis='y', labelcolor='g')
                 ax2.set_ylim(0, 1.1)
             ax2.plot(x, loss_history['val_acc'], 'm--v', linewidth=2,
-                     markersize=4, label='Val Acc')
+                    markersize=4, label='Val Acc')
 
         ax.set_title('Initial Training Progress', fontsize=14, fontweight='bold')
         ax.set_xlabel('Epoch')
@@ -168,7 +168,7 @@ class ResultVisualizer:
 
             plt.tight_layout()
             plt.savefig(os.path.join(self.results_dir, 'loss_per_class_align.png'),
-                        dpi=150, bbox_inches='tight')
+                       dpi=150, bbox_inches='tight')
             plt.close()
 
     def plot_confusion_matrices(self, cm_before: List[List], cm_after: List[List],
@@ -188,32 +188,40 @@ class ResultVisualizer:
         cm_before_norm = np.nan_to_num(cm_before_norm)
         cm_after_norm = np.nan_to_num(cm_after_norm)
 
-        # Create annotation arrays with percentage and raw count for ALL cells
-        annot_before = np.empty_like(cm_before, dtype=object)
-        annot_after = np.empty_like(cm_after, dtype=object)
-
-        for i in range(len(class_names)):
-            for j in range(len(class_names)):
-                pct_before = cm_before_norm[i, j] * 100
-                pct_after = cm_after_norm[i, j] * 100
-                annot_before[i, j] = f'{pct_before:.1f}%\n({cm_before[i, j]})'
-                annot_after[i, j] = f'{pct_after:.1f}%\n({cm_after[i, j]})'
-
-        # Before confusion matrix
-        sns.heatmap(cm_before_norm, annot=annot_before, fmt='', cmap='Blues',
-                    xticklabels=class_names, yticklabels=class_names, ax=axes[0],
-                    cbar_kws={'label': 'Proportion'}, annot_kws={'fontsize': 10})
+        # Plot heatmaps WITHOUT annotations first
+        sns.heatmap(cm_before_norm, annot=False, cmap='Blues',
+                   xticklabels=class_names, yticklabels=class_names, ax=axes[0],
+                   cbar_kws={'label': 'Proportion'})
         axes[0].set_title('Before Recalibration', fontsize=14, fontweight='bold')
         axes[0].set_xlabel('Predicted')
         axes[0].set_ylabel('True')
 
-        # After confusion matrix
-        sns.heatmap(cm_after_norm, annot=annot_after, fmt='', cmap='Greens',
-                    xticklabels=class_names, yticklabels=class_names, ax=axes[1],
-                    cbar_kws={'label': 'Proportion'}, annot_kws={'fontsize': 10})
+        sns.heatmap(cm_after_norm, annot=False, cmap='Greens',
+                   xticklabels=class_names, yticklabels=class_names, ax=axes[1],
+                   cbar_kws={'label': 'Proportion'})
         axes[1].set_title('After Recalibration', fontsize=14, fontweight='bold')
         axes[1].set_xlabel('Predicted')
         axes[1].set_ylabel('True')
+
+        # Manually add text annotations with proper color contrast
+        for i in range(len(class_names)):
+            for j in range(len(class_names)):
+                # Before matrix
+                pct_before = cm_before_norm[i, j] * 100
+                text_before = f'{pct_before:.1f}%\n({cm_before[i, j]})'
+                # Choose text color based on background intensity
+                text_color_before = 'white' if cm_before_norm[i, j] > 0.5 else 'black'
+                axes[0].text(j + 0.5, i + 0.5, text_before,
+                           ha='center', va='center', fontsize=10,
+                           color=text_color_before, fontweight='bold')
+
+                # After matrix
+                pct_after = cm_after_norm[i, j] * 100
+                text_after = f'{pct_after:.1f}%\n({cm_after[i, j]})'
+                text_color_after = 'white' if cm_after_norm[i, j] > 0.5 else 'black'
+                axes[1].text(j + 0.5, i + 0.5, text_after,
+                           ha='center', va='center', fontsize=10,
+                           color=text_color_after, fontweight='bold')
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, filename), dpi=150, bbox_inches='tight')
@@ -223,29 +231,34 @@ class ResultVisualizer:
         fig, ax = plt.subplots(figsize=(8, 6))
         cm_diff = cm_after_norm - cm_before_norm
 
-        # Create annotation for difference matrix
-        annot_diff = np.empty_like(cm_diff, dtype=object)
-        for i in range(len(class_names)):
-            for j in range(len(class_names)):
-                diff_pct = cm_diff[i, j] * 100
-                sign = '+' if diff_pct >= 0 else ''
-                annot_diff[i, j] = f'{sign}{diff_pct:.1f}%'
-
         # Custom colormap: red for negative, white for zero, green for positive
         colors = ['#e74c3c', 'white', '#27ae60']
         cmap = LinearSegmentedColormap.from_list('diff', colors)
 
-        sns.heatmap(cm_diff, annot=annot_diff, fmt='', cmap=cmap, center=0,
-                    xticklabels=class_names, yticklabels=class_names, ax=ax,
-                    cbar_kws={'label': 'Change'}, annot_kws={'fontsize': 11, 'fontweight': 'bold'})
+        # Plot heatmap without annotations
+        sns.heatmap(cm_diff, annot=False, cmap=cmap, center=0,
+                   xticklabels=class_names, yticklabels=class_names, ax=ax,
+                   cbar_kws={'label': 'Change'})
         ax.set_title('Change in Confusion Matrix (After - Before)',
-                     fontsize=14, fontweight='bold')
+                    fontsize=14, fontweight='bold')
         ax.set_xlabel('Predicted')
         ax.set_ylabel('True')
 
+        # Manually add text annotations for difference matrix
+        for i in range(len(class_names)):
+            for j in range(len(class_names)):
+                diff_pct = cm_diff[i, j] * 100
+                sign = '+' if diff_pct >= 0 else ''
+                text_diff = f'{sign}{diff_pct:.1f}%'
+                # For difference matrix, use black text (white background near zero)
+                text_color = 'white' if abs(cm_diff[i, j]) > 0.3 else 'black'
+                ax.text(j + 0.5, i + 0.5, text_diff,
+                       ha='center', va='center', fontsize=11,
+                       color=text_color, fontweight='bold')
+
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, 'confusion_matrix_diff.png'),
-                    dpi=150, bbox_inches='tight')
+                   dpi=150, bbox_inches='tight')
         plt.close()
 
     def plot_per_class_comparison(self, per_class_before: Dict, per_class_after: Dict,
@@ -268,23 +281,23 @@ class ResultVisualizer:
             before_vals = [per_class_before[c][metric] for c in class_names]
             after_vals = [per_class_after[c][metric] for c in class_names]
 
-            bars1 = ax.bar(x - width / 2, before_vals, width, label='Before',
-                           color=self.colors['before'], alpha=0.8)
-            bars2 = ax.bar(x + width / 2, after_vals, width, label='After',
-                           color=self.colors['after'], alpha=0.8)
+            bars1 = ax.bar(x - width/2, before_vals, width, label='Before',
+                          color=self.colors['before'], alpha=0.8)
+            bars2 = ax.bar(x + width/2, after_vals, width, label='After',
+                          color=self.colors['after'], alpha=0.8)
 
             # Add value labels
             for bar in bars1:
                 height = bar.get_height()
-                ax.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height),
-                            xytext=(0, 3), textcoords="offset points",
-                            ha='center', va='bottom', fontsize=9)
+                ax.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width()/2, height),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
 
             for bar in bars2:
                 height = bar.get_height()
-                ax.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height),
-                            xytext=(0, 3), textcoords="offset points",
-                            ha='center', va='bottom', fontsize=9)
+                ax.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width()/2, height),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
 
             ax.set_title(title, fontsize=14, fontweight='bold')
             ax.set_xticks(x)
@@ -301,10 +314,10 @@ class ResultVisualizer:
         fig, ax = plt.subplots(figsize=(12, 6))
 
         acc_changes = [per_class_after[c]['accuracy'] - per_class_before[c]['accuracy']
-                       for c in class_names]
+                      for c in class_names]
 
         colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                  for v in acc_changes]
+                 for v in acc_changes]
 
         bars = ax.bar(class_names, acc_changes, color=colors, alpha=0.8, edgecolor='black')
 
@@ -313,9 +326,9 @@ class ResultVisualizer:
             height = bar.get_height()
             va = 'bottom' if height >= 0 else 'top'
             offset = 3 if height >= 0 else -3
-            ax.annotate(f'{val:+.3f}', xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, offset), textcoords="offset points",
-                        ha='center', va=va, fontsize=10, fontweight='bold')
+            ax.annotate(f'{val:+.3f}', xy=(bar.get_x() + bar.get_width()/2, height),
+                       xytext=(0, offset), textcoords="offset points",
+                       ha='center', va=va, fontsize=10, fontweight='bold')
 
         ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
         ax.set_title('Per-Class Accuracy Change', fontsize=14, fontweight='bold')
@@ -324,7 +337,7 @@ class ResultVisualizer:
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, 'accuracy_change.png'),
-                    dpi=150, bbox_inches='tight')
+                   dpi=150, bbox_inches='tight')
         plt.close()
 
     def plot_metrics_comparison(self, results_before: Dict, results_after: Dict,
@@ -353,10 +366,10 @@ class ResultVisualizer:
         x = np.arange(len(metrics))
         width = 0.35
 
-        bars1 = axes[0].bar(x - width / 2, before_vals, width, label='Before',
-                            color=self.colors['before'], alpha=0.8)
-        bars2 = axes[0].bar(x + width / 2, after_vals, width, label='After',
-                            color=self.colors['after'], alpha=0.8)
+        bars1 = axes[0].bar(x - width/2, before_vals, width, label='Before',
+                           color=self.colors['before'], alpha=0.8)
+        bars2 = axes[0].bar(x + width/2, after_vals, width, label='After',
+                           color=self.colors['after'], alpha=0.8)
 
         axes[0].set_title('Metrics Before vs After', fontsize=14, fontweight='bold')
         axes[0].set_xticks(x)
@@ -368,19 +381,19 @@ class ResultVisualizer:
         # Add value labels
         for bar in bars1:
             axes[0].annotate(f'{bar.get_height():.3f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                             xytext=(0, 3), textcoords="offset points",
-                             ha='center', va='bottom', fontsize=9)
+                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
         for bar in bars2:
             axes[0].annotate(f'{bar.get_height():.3f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                             xytext=(0, 3), textcoords="offset points",
-                             ha='center', va='bottom', fontsize=9)
+                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
 
         # Change chart
         changes = [a - b for a, b in zip(after_vals, before_vals)]
         colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                  for v in changes]
+                 for v in changes]
 
         bars = axes[1].bar(metrics, changes, color=colors, alpha=0.8, edgecolor='black')
         axes[1].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
@@ -393,16 +406,16 @@ class ResultVisualizer:
             va = 'bottom' if height >= 0 else 'top'
             offset = 3 if height >= 0 else -3
             axes[1].annotate(f'{val:+.4f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, height),
-                             xytext=(0, offset), textcoords="offset points",
-                             ha='center', va=va, fontsize=10, fontweight='bold')
+                           xy=(bar.get_x() + bar.get_width()/2, height),
+                           xytext=(0, offset), textcoords="offset points",
+                           ha='center', va=va, fontsize=10, fontweight='bold')
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, filename), dpi=150, bbox_inches='tight')
         plt.close()
 
     def plot_class_distribution(self, train_counts: Dict, val_counts: Dict,
-                                filename: str = "class_distribution.png"):
+                               filename: str = "class_distribution.png"):
         """Plot class distribution in training and validation sets."""
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
@@ -417,18 +430,18 @@ class ResultVisualizer:
         axes[0].set_ylabel('Number of Images')
 
         for bar, val in zip(bars1, train_vals):
-            axes[0].annotate(str(val), xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                             xytext=(0, 3), textcoords="offset points",
-                             ha='center', va='bottom', fontsize=11, fontweight='bold')
+            axes[0].annotate(str(val), xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=11, fontweight='bold')
 
         # Calculate percentages
         total_train = sum(train_vals)
         for i, (bar, val) in enumerate(zip(bars1, train_vals)):
             pct = val / total_train * 100
             axes[0].annotate(f'({pct:.1f}%)',
-                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2),
-                             ha='center', va='center', fontsize=10, color='white',
-                             fontweight='bold')
+                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()/2),
+                           ha='center', va='center', fontsize=10, color='white',
+                           fontweight='bold')
 
         # Validation set
         val_vals = [val_counts[c] for c in class_names]
@@ -439,17 +452,17 @@ class ResultVisualizer:
         axes[1].set_ylabel('Number of Images')
 
         for bar, val in zip(bars2, val_vals):
-            axes[1].annotate(str(val), xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                             xytext=(0, 3), textcoords="offset points",
-                             ha='center', va='bottom', fontsize=11, fontweight='bold')
+            axes[1].annotate(str(val), xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=11, fontweight='bold')
 
         total_val = sum(val_vals)
         for i, (bar, val) in enumerate(zip(bars2, val_vals)):
             pct = val / total_val * 100
             axes[1].annotate(f'({pct:.1f}%)',
-                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2),
-                             ha='center', va='center', fontsize=10, color='white',
-                             fontweight='bold')
+                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()/2),
+                           ha='center', va='center', fontsize=10, color='white',
+                           fontweight='bold')
 
         axes[0].grid(axis='y', alpha=0.3)
         axes[1].grid(axis='y', alpha=0.3)
@@ -462,16 +475,16 @@ class ResultVisualizer:
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
         axes[0].pie(train_vals, labels=class_names, autopct='%1.1f%%',
-                    colors=colors_train, startangle=90)
+                   colors=colors_train, startangle=90)
         axes[0].set_title('Training Set', fontsize=14, fontweight='bold')
 
         axes[1].pie(val_vals, labels=class_names, autopct='%1.1f%%',
-                    colors=colors_val, startangle=90)
+                   colors=colors_val, startangle=90)
         axes[1].set_title('Validation Set', fontsize=14, fontweight='bold')
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, 'class_distribution_pie.png'),
-                    dpi=150, bbox_inches='tight')
+                   dpi=150, bbox_inches='tight')
         plt.close()
 
     def plot_misclassification_analysis(self, misclass_before: Dict,
@@ -499,14 +512,14 @@ class ResultVisualizer:
 
         # Before
         sns.heatmap(matrix_before, annot=True, fmt='.0f', cmap='Reds',
-                    xticklabels=class_names, yticklabels=class_names, ax=axes[0])
+                   xticklabels=class_names, yticklabels=class_names, ax=axes[0])
         axes[0].set_title('Misclassifications Before', fontsize=14, fontweight='bold')
         axes[0].set_xlabel('Predicted As')
         axes[0].set_ylabel('True Class')
 
         # After
         sns.heatmap(matrix_after, annot=True, fmt='.0f', cmap='Oranges',
-                    xticklabels=class_names, yticklabels=class_names, ax=axes[1])
+                   xticklabels=class_names, yticklabels=class_names, ax=axes[1])
         axes[1].set_title('Misclassifications After', fontsize=14, fontweight='bold')
         axes[1].set_xlabel('Predicted As')
         axes[1].set_ylabel('True Class')
@@ -524,10 +537,10 @@ class ResultVisualizer:
         x = np.arange(len(class_names))
         width = 0.35
 
-        ax.bar(x - width / 2, total_before, width, label='Before',
-               color=self.colors['before'], alpha=0.8)
-        ax.bar(x + width / 2, total_after, width, label='After',
-               color=self.colors['after'], alpha=0.8)
+        ax.bar(x - width/2, total_before, width, label='Before',
+              color=self.colors['before'], alpha=0.8)
+        ax.bar(x + width/2, total_after, width, label='After',
+              color=self.colors['after'], alpha=0.8)
 
         ax.set_title('Total Misclassifications by Class', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
@@ -538,7 +551,7 @@ class ResultVisualizer:
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, 'misclassification_summary.png'),
-                    dpi=150, bbox_inches='tight')
+                   dpi=150, bbox_inches='tight')
         plt.close()
 
     def plot_experiment3_tcav_comparison(self, tcav_before: Dict, tcav_after: Dict,
@@ -563,22 +576,22 @@ class ResultVisualizer:
         before_vals = [tcav_before[c] for c in class_names]
         after_vals = [tcav_after[c] for c in class_names]
 
-        bars1 = axes[0].bar(x - width / 2, before_vals, width, label='Before',
-                            color=self.colors['before'], alpha=0.8)
-        bars2 = axes[0].bar(x + width / 2, after_vals, width, label='After',
-                            color=self.colors['after'], alpha=0.8)
+        bars1 = axes[0].bar(x - width/2, before_vals, width, label='Before',
+                           color=self.colors['before'], alpha=0.8)
+        bars2 = axes[0].bar(x + width/2, after_vals, width, label='After',
+                           color=self.colors['after'], alpha=0.8)
 
         # Add value labels
         for bar in bars1:
             axes[0].annotate(f'{bar.get_height():.3f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                             xytext=(0, 3), textcoords="offset points",
-                             ha='center', va='bottom', fontsize=9)
+                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
         for bar in bars2:
             axes[0].annotate(f'{bar.get_height():.3f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                             xytext=(0, 3), textcoords="offset points",
-                             ha='center', va='bottom', fontsize=9)
+                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                           xytext=(0, 3), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
 
         axes[0].set_title('Per-Class TCAV Scores', fontsize=14, fontweight='bold')
         axes[0].set_xticks(x)
@@ -590,7 +603,7 @@ class ResultVisualizer:
         # TCAV change chart
         changes = [tcav_after[c] - tcav_before[c] for c in class_names]
         colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                  for v in changes]
+                 for v in changes]
 
         bars = axes[1].bar(class_names, changes, color=colors, alpha=0.8, edgecolor='black')
         axes[1].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
@@ -604,9 +617,9 @@ class ResultVisualizer:
             va = 'bottom' if height >= 0 else 'top'
             offset = 3 if height >= 0 else -3
             axes[1].annotate(f'{val:+.4f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, height),
-                             xytext=(0, offset), textcoords="offset points",
-                             ha='center', va=va, fontsize=10, fontweight='bold')
+                           xy=(bar.get_x() + bar.get_width()/2, height),
+                           xytext=(0, offset), textcoords="offset points",
+                           ha='center', va=va, fontsize=10, fontweight='bold')
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, filename), dpi=150, bbox_inches='tight')
@@ -648,11 +661,11 @@ class ResultVisualizer:
             table[(0, i)].set_text_props(color='white', fontweight='bold')
 
         ax.set_title('Experiment 3: Class-Layer Assignments', fontsize=14,
-                     fontweight='bold', pad=20)
+                    fontweight='bold', pad=20)
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.results_dir, 'experiment3_assignments.png'),
-                    dpi=150, bbox_inches='tight')
+                   dpi=150, bbox_inches='tight')
         plt.close()
 
     def create_summary_dashboard(self, all_results: Dict):
@@ -662,8 +675,8 @@ class ResultVisualizer:
         # Title
         target_info = all_results.get("target_class", "multiple")
         fig.suptitle(f'Experiment {all_results["experiment"]} Summary Dashboard\n'
-                     f'Model: {all_results["model_name"]} | Target: {target_info}',
-                     fontsize=16, fontweight='bold', y=0.98)
+                    f'Model: {all_results["model_name"]} | Target: {target_info}',
+                    fontsize=16, fontweight='bold', y=0.98)
 
         # Create grid
         gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
@@ -672,9 +685,9 @@ class ResultVisualizer:
         ax1 = fig.add_subplot(gs[0, 0])
         metrics = ['Accuracy', 'TCAV']
         before = [all_results['results_before']['overall']['accuracy'],
-                  all_results['tcav_before']]
+                 all_results['tcav_before']]
         after = [all_results['results_after']['overall']['accuracy'],
-                 all_results['tcav_after']]
+                all_results['tcav_after']]
 
         x = np.arange(len(metrics))
         ax1.bar(x - 0.2, before, 0.4, label='Before', color=self.colors['before'])
@@ -706,9 +719,9 @@ class ResultVisualizer:
         ax4 = fig.add_subplot(gs[1, :2])
         class_names = list(all_results['results_before']['per_class'].keys())
         before_acc = [all_results['results_before']['per_class'][c]['accuracy']
-                      for c in class_names]
-        after_acc = [all_results['results_after']['per_class'][c]['accuracy']
                      for c in class_names]
+        after_acc = [all_results['results_after']['per_class'][c]['accuracy']
+                    for c in class_names]
 
         x = np.arange(len(class_names))
         ax4.bar(x - 0.2, before_acc, 0.4, label='Before', color=self.colors['before'])
@@ -741,14 +754,14 @@ class ResultVisualizer:
             f"Ratio: {all_results.get('imbalance_ratio', 1.0):.1%}"
         )
         ax6.text(0.1, 0.9, config_text, transform=ax6.transAxes, fontsize=12,
-                 verticalalignment='top', fontfamily='monospace',
-                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+                verticalalignment='top', fontfamily='monospace',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
         # 7-9. Changes
         ax7 = fig.add_subplot(gs[2, :])
         changes = {c: after_acc[i] - before_acc[i] for i, c in enumerate(class_names)}
         colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                  for v in changes.values()]
+                 for v in changes.values()]
         bars = ax7.bar(changes.keys(), changes.values(), color=colors)
         ax7.axhline(y=0, color='black', linewidth=0.5)
         ax7.set_title('Accuracy Change by Class', fontweight='bold')
@@ -757,11 +770,11 @@ class ResultVisualizer:
         for bar, val in zip(bars, changes.values()):
             height = bar.get_height()
             ax7.annotate(f'{val:+.3f}',
-                         xy=(bar.get_x() + bar.get_width() / 2, height),
-                         xytext=(0, 3 if height >= 0 else -10),
-                         textcoords="offset points",
-                         ha='center', fontweight='bold')
+                        xy=(bar.get_x() + bar.get_width()/2, height),
+                        xytext=(0, 3 if height >= 0 else -10),
+                        textcoords="offset points",
+                        ha='center', fontweight='bold')
 
         plt.savefig(os.path.join(self.results_dir, 'summary_dashboard.png'),
-                    dpi=150, bbox_inches='tight')
+                   dpi=150, bbox_inches='tight')
         plt.close()
