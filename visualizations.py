@@ -44,6 +44,67 @@ class ResultVisualizer:
             'neutral': '#95a5a6'  # Gray
         }
     
+    def plot_initial_training(self, loss_history: Dict, epochs: int,
+                              filename: str = "initial_training_loss.png"):
+        """Plot initial/pre-training loss curves."""
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        x = range(1, epochs + 1)
+        
+        # Handle different possible keys in loss_history
+        has_loss_plotted = False
+        
+        if 'train_loss' in loss_history:
+            ax.plot(x, loss_history['train_loss'], 'b-o', linewidth=2, 
+                   markersize=4, label='Train Loss')
+            has_loss_plotted = True
+        if 'val_loss' in loss_history:
+            ax.plot(x, loss_history['val_loss'], 'r-s', linewidth=2,
+                   markersize=4, label='Val Loss')
+            has_loss_plotted = True
+        if 'loss' in loss_history and not has_loss_plotted:
+            ax.plot(x, loss_history['loss'], 'b-o', linewidth=2,
+                   markersize=4, label='Loss')
+            has_loss_plotted = True
+        if 'total' in loss_history and not has_loss_plotted:
+            ax.plot(x, loss_history['total'], 'b-o', linewidth=2,
+                   markersize=4, label='Total Loss')
+            has_loss_plotted = True
+        if 'cls' in loss_history:
+            ax.plot(x, loss_history['cls'], 'orange', marker='s', linewidth=2,
+                   markersize=4, label='Classification Loss')
+        
+        # Handle accuracy on secondary axis
+        ax2 = None
+        if 'train_acc' in loss_history:
+            ax2 = ax.twinx()
+            ax2.plot(x, loss_history['train_acc'], 'g--^', linewidth=2,
+                    markersize=4, label='Train Acc')
+            ax2.set_ylabel('Accuracy', color='g')
+            ax2.tick_params(axis='y', labelcolor='g')
+            ax2.set_ylim(0, 1.1)
+        if 'val_acc' in loss_history:
+            if ax2 is None:
+                ax2 = ax.twinx()
+                ax2.set_ylabel('Accuracy', color='g')
+                ax2.tick_params(axis='y', labelcolor='g')
+                ax2.set_ylim(0, 1.1)
+            ax2.plot(x, loss_history['val_acc'], 'm--v', linewidth=2,
+                    markersize=4, label='Val Acc')
+        
+        ax.set_title('Initial Training Progress', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Loss')
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc='upper right')
+        
+        if ax2 is not None:
+            ax2.legend(loc='lower right')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.results_dir, filename), dpi=150, bbox_inches='tight')
+        plt.close()
+    
     def plot_loss_curves(self, loss_history: Dict, epochs: int, 
                          filename: str = "loss_curves.png"):
         """Plot training loss curves."""

@@ -1,0 +1,209 @@
+{
+  "experiment_name": "exp2_custom_cnn_zebra_20251217_003333",
+  "start_time": "2025-12-17T00:33:33.348936",
+  "sections": [
+    {
+      "title": "Environment Setup",
+      "timestamp": "2025-12-17T00:33:33.351125"
+    },
+    {
+      "title": "Dataset Loading",
+      "timestamp": "2025-12-17T00:33:33.351790"
+    },
+    {
+      "title": "Concept Loading",
+      "timestamp": "2025-12-17T00:33:33.484036"
+    },
+    {
+      "title": "Model Initialization",
+      "timestamp": "2025-12-17T00:33:33.527877"
+    },
+    {
+      "title": "Phase 1: Initial Training on Imbalanced Data",
+      "timestamp": "2025-12-17T00:33:34.600756"
+    },
+    {
+      "title": "Phase 2: CAV Computation",
+      "timestamp": "2025-12-17T01:10:39.611901"
+    },
+    {
+      "title": "Phase 3: Evaluation BEFORE Recalibration",
+      "timestamp": "2025-12-17T01:13:07.266358"
+    },
+    {
+      "title": "Phase 4: Recalibration (Experiment 2)",
+      "timestamp": "2025-12-17T01:13:36.034805"
+    },
+    {
+      "title": "Phase 5: Evaluation AFTER Recalibration",
+      "timestamp": "2025-12-17T01:21:44.296829"
+    },
+    {
+      "title": "Results Comparison",
+      "timestamp": "2025-12-17T01:22:08.243044"
+    },
+    {
+      "title": "Saving Results and Generating Visualizations",
+      "timestamp": "2025-12-17T01:22:08.244276"
+    },
+    {
+      "title": "Experiment Summary",
+      "timestamp": "2025-12-17T01:22:12.811536"
+    }
+  ],
+  "config": {
+    "experiment": 2,
+    "model_name": "custom_cnn",
+    "model_path": null,
+    "pretrained": false,
+    "layer": "features.17",
+    "dataset_path": "./dataset",
+    "concept_path": "./concept",
+    "target_class": "zebra",
+    "concept": "stripes",
+    "imbalance_class": "zebra",
+    "imbalance_ratio": 0.05,
+    "pretrain_epochs": 30,
+    "pretrain_lr": 0.001,
+    "recalib_epochs": 10,
+    "recalib_lr": 0.0001,
+    "lambda_align": 0.5,
+    "batch_size": 16,
+    "classifier_type": "LinearSVC",
+    "seed": 42,
+    "results_path": "./results",
+    "epochs": null,
+    "learning_rate": null
+  },
+  "results_before": {
+    "overall": {
+      "accuracy": 0.9146634615384616,
+      "precision": 0.8977858861781532,
+      "recall": 0.9282127511093187,
+      "f1": 0.9091623221621847,
+      "avg_confidence": 0.964096188545227
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 167,
+        "wrong": 10,
+        "accuracy": 0.943502824858757,
+        "precision": 0.8028846153846154,
+        "recall": 0.943502824858757,
+        "f1": 0.8675324675324676,
+        "true_positives": 167,
+        "false_positives": 41,
+        "false_negatives": 10,
+        "true_negatives": 614,
+        "avg_confidence": 0.9646672010421753,
+        "conf_when_correct": 0.9713521003723145,
+        "conf_when_wrong": 0.853029727935791
+      },
+      "horse": {
+        "total": 246,
+        "correct": 240,
+        "wrong": 6,
+        "accuracy": 0.975609756097561,
+        "precision": 0.898876404494382,
+        "recall": 0.975609756097561,
+        "f1": 0.935672514619883,
+        "true_positives": 240,
+        "false_positives": 27,
+        "false_negatives": 6,
+        "true_negatives": 559,
+        "avg_confidence": 0.9810394048690796,
+        "conf_when_correct": 0.9857347011566162,
+        "conf_when_wrong": 0.793224036693573
+      },
+      "zebra": {
+        "total": 409,
+        "correct": 354,
+        "wrong": 55,
+        "accuracy": 0.8655256723716381,
+        "precision": 0.9915966386554622,
+        "recall": 0.8655256723716381,
+        "f1": 0.9242819843342036,
+        "true_positives": 354,
+        "false_positives": 3,
+        "false_negatives": 55,
+        "true_negatives": 420,
+        "avg_confidence": 0.9536585211753845,
+        "conf_when_correct": 0.9681243300437927,
+        "conf_when_wrong": 0.8605511784553528
+      }
+    },
+    "tcav_score": 0.7843137383460999
+  },
+  "results_after": {
+    "overall": {
+      "accuracy": 0.9074519230769231,
+      "precision": 0.8898965005105356,
+      "recall": 0.9233227755591965,
+      "f1": 0.9014562736559086,
+      "avg_confidence": 0.9627647995948792
+    },
+    "per_class": {
+      "deer": {
+        "total": 177,
+        "correct": 167,
+        "wrong": 10,
+        "accuracy": 0.943502824858757,
+        "precision": 0.7731481481481481,
+        "recall": 0.943502824858757,
+        "f1": 0.8498727735368956,
+        "true_positives": 167,
+        "false_positives": 49,
+        "false_negatives": 10,
+        "true_negatives": 606,
+        "avg_confidence": 0.9710133075714111,
+        "conf_when_correct": 0.978625476360321,
+        "conf_when_wrong": 0.8438906669616699
+      },
+      "horse": {
+        "total": 246,
+        "correct": 240,
+        "wrong": 6,
+        "accuracy": 0.975609756097561,
+        "precision": 0.9022556390977443,
+        "recall": 0.975609756097561,
+        "f1": 0.9374999999999999,
+        "true_positives": 240,
+        "false_positives": 26,
+        "false_negatives": 6,
+        "true_negatives": 560,
+        "avg_confidence": 0.9803181886672974,
+        "conf_when_correct": 0.9836562871932983,
+        "conf_when_wrong": 0.8467938303947449
+      },
+      "zebra": {
+        "total": 409,
+        "correct": 348,
+        "wrong": 61,
+        "accuracy": 0.8508557457212714,
+        "precision": 0.9942857142857143,
+        "recall": 0.8508557457212714,
+        "f1": 0.9169960474308301,
+        "true_positives": 348,
+        "false_positives": 2,
+        "false_negatives": 61,
+        "true_negatives": 421,
+        "avg_confidence": 0.9486373662948608,
+        "conf_when_correct": 0.9645469188690186,
+        "conf_when_wrong": 0.8578746318817139
+      }
+    },
+    "tcav_score": 0.8725490570068359
+  },
+  "comparison": {
+    "overall_change": {
+      "accuracy": -0.007211538461538436,
+      "precision": -0.007889385667617654,
+      "recall": -0.004889975550122161,
+      "f1": -0.0077060485062760975,
+      "tcav": 0.08823531866073608
+    }
+  },
+  "end_time": "2025-12-17T01:22:12.811891",
+  "duration_seconds": 2919.462955
+}

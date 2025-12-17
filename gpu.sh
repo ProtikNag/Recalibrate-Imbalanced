@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name=er
+#SBATCH --job-name=TCAV
 #SBATCH -N 1         			## Compute None (Number of computers)
 #SBATCH -n 24 	     			## CPU Cores 
 #SBATCH --gres=gpu:1 			## Run on 2 GPUs
@@ -19,6 +19,18 @@ python --version
 
 cd /work/pnag/Recalibrate-Imbalanced/
 python main_experiment.py \
+    --experiment 1 \
+    --model_name custom_cnn \
+    --layer features.17 \
+    --target_class zebra \
+    --concept stripes \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.05 \
+    --pretrain_epochs 30 \ 
+    --recalib_epochs 10
+python main_experiment.py \
     --experiment 2 \
     --model_name custom_cnn \
     --layer features.17 \
@@ -27,5 +39,6 @@ python main_experiment.py \
     --dataset_path ./dataset \
     --concept_path ./concept \
     --imbalance_class zebra \
-    --imbalance_ratio 0.1 \
-    --epochs 20
+    --imbalance_ratio 0.05 \
+    --pretrain_epochs 30 \
+    --recalib_epochs 10
