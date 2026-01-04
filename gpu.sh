@@ -58,3 +58,58 @@ python main_experiment.py \
     --imbalance_ratio 0.05 \
     --pretrain_epochs 50 \
     --recalib_epochs 20
+
+python main_experiment.py \
+    --experiment 3 \
+    --model_name custom_cnn \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --class_concept_map "zebra:stripes,horse:horse_skin,deer:coat" \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.05 \
+    --pretrain_epochs 50 \
+    --recalib_epochs 20
+
+python main_experiment.py \
+    --experiment 3 \
+    --model_name custom_cnn \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --class_concept_map "zebra:stripes,horse:horse_skin,deer:coat" \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.10 \
+    --pretrain_epochs 50 \
+    --recalib_epochs 20
+
+python main_experiment.py \
+    --experiment 3 \
+    --model_name custom_cnn \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --class_concept_map "zebra:stripes,horse:horse_skin,deer:coat" \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.20 \
+    --pretrain_epochs 50 \
+    --recalib_epochs 20
+
+python main_experiment.py \
+    --experiment 3 \
+    --model_name custom_cnn \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --class_concept_map "zebra:stripes,horse:horse_skin,deer:coat" \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.30 \
+    --pretrain_epochs 50 \
+    --recalib_epochs 20
+
+python main_experiment.py \
+    --experiment 3 \
+    --model_name custom_cnn \
+    --dataset_path ./dataset \
+    --concept_path ./concept \
+    --class_concept_map "zebra:stripes,horse:horse_skin,deer:coat" \
+    --imbalance_class zebra \
+    --imbalance_ratio 0.5 \
+    --pretrain_epochs 50 \
+    --recalib_epochs 20
