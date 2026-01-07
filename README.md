@@ -1,416 +1,357 @@
-# TCAV-Based Recalibration for Imbalanced Datasets - Enhanced Version
+# TCAV-Based Recalibration for Imbalanced Image Classification
 
-A comprehensive framework for improving CNN model performance on imbalanced datasets using TCAV-based layer recalibration.
+A framework for improving CNN interpretability and correcting class imbalance bias using Testing with Concept Activation Vectors (TCAV).
 
-## New Features in This Version
+## Overview
 
-### 1. Custom CNN Models (Untrained)
-- **custom_cnn**: Medium-sized CNN with 5 conv blocks
-- **custom_cnn_small**: Lightweight CNN for limited data
-- **custom_cnn_large**: Deeper CNN for complex tasks
+This project implements a concept-based recalibration framework that:
 
-### 2. Comprehensive Result Recording
-- Per-class accuracy, precision, recall, F1
-- Confusion matrices before/after recalibration (with percentages in all cells)
-- Misclassification analysis (which classes are confused)
-- Confidence scores for predictions
+1. **Creates biased models**: Trains CNNs on imbalanced datasets to simulate real-world bias
+2. **Identifies bottleneck layers**: Automatically selects optimal layers for concept alignment
+3. **Applies TCAV-based recalibration**: Fine-tunes specific layers to align activations with human-defined concepts
+4. **Evaluates improvements**: Measures changes in accuracy, TCAV scores, and interpretability
 
-### 3. Advanced Logging System
-- Detailed experiment logs (`experiment.log`)
-- JSON summaries (`experiment_summary.json`)
-- Global history tracking (`all_experiments_history.csv`)
-- Run comparison across experiments
+### Key Features
 
-### 4. Rich Visualizations
-- Loss curves (total, classification, alignment)
-- Confusion matrix heatmaps with difference plots (percentages in all cells)
-- Per-class accuracy comparison charts
-- Class distribution visualizations
-- Misclassification analysis plots
-- Summary dashboard
-
-### 5. Configurable Imbalance Injection
-- Apply any imbalance ratio (5%, 10%, 20%, 25%, etc.)
-- Select which class to make imbalanced
-- **Training and validation sets share the same imbalance distribution**
-
-### 6. Background Folder for Random/Negative Samples
-- Uses a dedicated `background` folder under the concept directory for random/negative samples in CAV training
-- More consistent and controlled negative sample selection
-
-### 7. Experiment 3: Joint Multi-Class Optimization
-- Automatic layer selection based on TCAV scores
-- Different concept for each class
-- Ensures no layer is used for multiple classes
-- Joint optimization of all alignment losses
+- **Caltech-101 Dataset**: Uses vehicle classes from Caltech-101 with automatic download
+- **Automatic Concept Extraction**: Uses DeepLabV3 segmentation to extract subject/background
+- **N-Class Support**: Works with any number of classes (not limited to 3)
+- **Dynamic Layer Selection**: Automatically selects best layers based on TCAV scores
+- **Comprehensive Visualizations**: Generates PNG and SVG outputs for all metrics
 
 ## Installation
 
 ```bash
-pip install torch torchvision numpy scikit-learn matplotlib seaborn pillow
+# Clone or create project directory
+mkdir tcav_recalibration && cd tcav_recalibration
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or: venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install torch torchvision numpy scikit-learn matplotlib seaborn tqdm pillow
 ```
 
-## Dataset Structure
+## Project Structure
 
 ```
-dataset/
-├── zebra/
-│   ├── image1.jpg
-│   └── ...
-├── horse/
-│   └── ...
-└── deer/
-    └── ...
-
-concept/
-├── background/           # NEW: Required folder for random/negative samples
-│   ├── random1.jpg
-│   └── ...
-├── zebra/
-│   ├── stripes/         # Concept folder
-│   │   └── stripe_images...
-│   └── other_concept/
-│       └── ...
-├── horse/
-│   ├── mane/
-│   └── ...
-└── deer/
-    ├── antlers/
-    └── ...
+tcav_recalibration/
+├── main_experiment.py      # Main experiment runner
+├── concept_generator.py    # DeepLabV3-based concept extraction
+├── dataloader_caltech.py   # Caltech-101 data loading with imbalance support
+├── utils.py                # Models, CAV training, evaluation utilities
+├── visualizations.py       # Result visualization (PNG + SVG)
+├── logger_system.py        # Comprehensive logging
+├── gpu.sh                  # SLURM batch script
+├── README.md               # This file
+├── data/                   # Caltech-101 data (auto-downloaded)
+├── concepts/               # Generated concept images
+└── results/                # Experiment outputs
 ```
-
-**Important**: The `background` folder is required under the concept directory. It should contain random/negative images that don't represent any specific concept.
 
 ## Quick Start
 
-### List Available Layers
+### 1. Generate Concepts (Optional - Auto-generated on first run)
 
 ```bash
-# For custom CNN
-python list_layers.py --model_name custom_cnn
-
-# For pretrained VGG16
-python list_layers.py --model_name vgg16 --pretrained
-
-# Detailed view
-python list_layers.py --model_name resnet50 --detailed
+python concept_generator.py \
+    --dataset_path ./data/caltech101/101_ObjectCategories \
+    --output_path ./concepts \
+    --classes "airplanes,Motorbikes,car_side,ferry,helicopter"
 ```
 
-### Run Experiments
+### 2. Run Experiment
 
-**Experiment 1**: Train only with target class
-```bash
-python main_experiment.py \
-    --experiment 1 \
-    --model_name custom_cnn \
-    --layer features.17 \
-    --target_class zebra \
-    --concept stripes \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --imbalance_class zebra \
-    --imbalance_ratio 0.1 \
-    --pretrain_epochs 30 \
-    --recalib_epochs 10
-```
-
-**Experiment 2**: Train with full dataset, selective alignment
-```bash
-python main_experiment.py \
-    --experiment 2 \
-    --model_name custom_cnn \
-    --layer features.17 \
-    --target_class zebra \
-    --concept stripes \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --imbalance_class zebra \
-    --imbalance_ratio 0.1 \
-    --pretrain_epochs 30 \
-    --recalib_epochs 10
-```
-
-**Experiment 3**: Joint optimization with multiple concepts (automatic layer selection)
 ```bash
 python main_experiment.py \
     --experiment 3 \
     --model_name custom_cnn \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --class_concept_map "zebra:stripes,horse:mane,deer:antlers" \
-    --imbalance_class zebra \
+    --dataset_path ./data \
+    --concept_path ./concepts \
+    --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject,ferry:subject,helicopter:subject" \
+    --imbalance_class airplanes \
     --imbalance_ratio 0.1 \
-    --pretrain_epochs 30 \
-    --recalib_epochs 10
+    --pretrain_epochs 50 \
+    --recalib_epochs 20
+```
+
+### 3. Run on SLURM Cluster
+
+```bash
+sbatch gpu.sh
 ```
 
 ## Command Line Arguments
 
-### Required Arguments
-| Argument | Description |
-|----------|-------------|
-| `--experiment` | Experiment type: 1, 2, or 3 |
-| `--dataset_path` | Path to dataset directory |
-| `--concept_path` | Path to concept directory (must contain `background` folder) |
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--experiment` | int | 3 | Experiment type (1, 2, or 3) |
+| `--model_name` | str | custom_cnn | CNN architecture |
+| `--dataset_path` | str | ./data | Root directory for Caltech-101 |
+| `--concept_path` | str | ./concepts | Path to concept images |
+| `--class_concept_map` | str | required | Class:concept pairs (comma-separated) |
+| `--imbalance_class` | str | None | Class to make imbalanced |
+| `--imbalance_ratio` | float | None | Ratio of data to keep (0.05-1.0) |
+| `--pretrain_epochs` | int | 30 | Epochs for initial training |
+| `--recalib_epochs` | int | 10 | Epochs for recalibration |
+| `--lambda_align` | float | 0.5 | Weight for alignment loss |
+| `--batch_size` | int | 32 | Training batch size |
+| `--pretrained` | flag | False | Use ImageNet pretrained weights |
+| `--seed` | int | 42 | Random seed |
 
-### Experiment-Specific Arguments
-| Argument | Required For | Description |
-|----------|--------------|-------------|
-| `--target_class` | Exp 1 & 2 | Target class for alignment |
-| `--concept` | Exp 1 & 2 | Concept folder name (e.g., stripes) |
-| `--class_concept_map` | Exp 3 | Class-concept mappings (format: "class1:concept1,class2:concept2") |
+## Available Models
 
-### Model Configuration
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--model_name` | custom_cnn | Model architecture |
-| `--model_path` | None | Path to pre-trained weights |
-| `--pretrained` | False | Use ImageNet pretrained weights |
-| `--layer` | auto | Layer for recalibration (ignored for Exp 3) |
+| Model | Description | Parameters |
+|-------|-------------|------------|
+| `custom_cnn` | Medium custom CNN | ~5M |
+| `custom_cnn_small` | Small custom CNN | ~1M |
+| `custom_cnn_large` | Large custom CNN | ~15M |
+| `vgg16` | VGG-16 | 138M |
+| `resnet18` | ResNet-18 | 11M |
+| `resnet50` | ResNet-50 | 25M |
+| `inception_v3` | Inception-V3 | 27M |
+| `mobilenet_v3_small` | MobileNet-V3 Small | 2.5M |
+| `mobilenet_v3_large` | MobileNet-V3 Large | 5.4M |
 
-### Imbalance Configuration
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--imbalance_class` | None | Class to make imbalanced |
-| `--imbalance_ratio` | None | Ratio of data to keep (0.05-1.0) |
+## Available Caltech-101 Vehicle Classes
 
-**Note**: Both training and validation sets will have the same imbalance distribution.
+| Class Name | Images | Notes |
+|------------|--------|-------|
+| `airplanes` | ~800 | Commercial aircraft |
+| `Motorbikes` | ~798 | Motorcycles |
+| `car_side` | ~123 | Side view of cars |
+| `ferry` | ~67 | Ferry boats |
+| `helicopter` | ~88 | Helicopters |
+| `schooner` | ~63 | Sailing ships |
 
-**Imbalance Ratio Examples:**
-- `0.05` = Keep only 5% (extreme imbalance)
-- `0.10` = Keep only 10% (severe imbalance)
-- `0.20` = Keep only 20% (moderate imbalance)
-- `0.25` = Keep only 25% (mild imbalance)
-- `1.0` = Keep all data (balanced)
+## Experiment Types
 
-### Training Hyperparameters
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--pretrain_epochs` | 30 | Initial training epochs |
-| `--recalib_epochs` | 10 | Recalibration epochs |
-| `--pretrain_lr` | 1e-3 | Initial training learning rate |
-| `--recalib_lr` | 1e-4 | Recalibration learning rate |
-| `--batch_size` | 16 | Batch size |
-| `--lambda_align` | 0.5 | Alignment loss weight |
+### Experiment 1: Single-Class Recalibration
+- Focuses on one target class
+- Uses data only from that class for recalibration
+- Best for debugging and understanding single-class behavior
 
-### Other Options
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--classifier_type` | LinearSVC | CAV classifier |
-| `--seed` | 42 | Random seed |
-| `--results_path` | ./results | Output directory |
-
-## Experiments Overview
-
-### Experiment 1: Target Class Only
-- Recalibrates using only data from the target class
-- Both alignment and classification losses computed on target class
-- Best for when you want to focus solely on improving one class
-
-### Experiment 2: Full Dataset with Selective Alignment
+### Experiment 2: Selective Alignment
 - Uses full dataset for classification loss
-- Alignment loss only for target class
-- Better maintains overall performance while improving target class
+- Applies alignment loss only to target class
+- Balances global performance with targeted improvement
 
-### Experiment 3: Joint Multi-Class Optimization (NEW)
-- Automatically selects the best layer for each class based on TCAV scores
-- Different concept for each class
-- **No layer is used for multiple classes** (prevents conflicts)
-- Jointly optimizes all alignment losses
-- Best for improving multiple classes simultaneously
-
-**How Experiment 3 Layer Selection Works:**
-1. Computes CAV and TCAV scores for all class-layer combinations
-2. Prioritizes classes with lowest TCAV scores (most need for improvement)
-3. Assigns each class the layer with the lowest TCAV score
-4. Ensures no layer is assigned to multiple classes
-
-## Supported Models
-
-### Custom Models (Untrained)
-| Model | Layers | Parameters | Suggested Layers |
-|-------|--------|------------|------------------|
-| custom_cnn | 5 blocks | ~2.5M | features.3, features.17, features.24 |
-| custom_cnn_small | 4 blocks | ~100K | conv1.0, conv3.0, conv4.0 |
-| custom_cnn_large | 5 blocks | ~15M | block1.0, block3.0, block5.0 |
-
-### Pretrained Models
-| Model | Suggested Layers |
-|-------|-----------------|
-| vgg16 | features.7, features.14, features.24 |
-| resnet50 | layer2.3.conv3, layer4.2.conv3 |
-| resnet18 | layer2.1.conv2, layer4.1.conv2 |
-| inception_v3 | Mixed_6e.branch1x1.conv |
-| mobilenet_v3_small | features.8.block.0.0 |
-| mobilenet_v3_large | features.12.block.0.0 |
+### Experiment 3: Joint Multi-Class Optimization (Recommended)
+- Automatically selects best layer for each class
+- Ensures no layer is reused across classes
+- Joint optimization of all alignment losses
+- Best overall results for imbalanced datasets
 
 ## Output Structure
 
 ```
-results/
-└── exp1_custom_cnn_zebra_20241216_123456/
-    ├── config.json                    # Experiment configuration
-    ├── experiment.log                 # Detailed text log
-    ├── experiment_summary.json        # JSON summary
-    ├── detailed_results.json          # All metrics and predictions
-    │
-    ├── initial_training_loss.png     # Pre-training loss curves
-    ├── loss_curves.png               # Recalibration loss plots
-    ├── loss_combined.png             # Combined loss plot
-    ├── loss_per_class_align.png      # Per-class alignment (Exp 3)
-    ├── confusion_matrices.png        # Before/after confusion
-    ├── confusion_matrix_diff.png     # Change in confusion
-    ├── per_class_comparison.png      # Per-class metrics
-    ├── accuracy_change.png           # Accuracy improvements
-    ├── metrics_comparison.png        # Overall metrics
-    ├── class_distribution.png        # Training/val distribution
-    ├── misclassification_analysis.png
-    ├── misclassification_summary.png
-    ├── experiment3_tcav.png          # Exp 3: TCAV comparison
-    ├── experiment3_assignments.png   # Exp 3: Layer assignments
-    ├── summary_dashboard.png         # Overview dashboard
-    │
-    ├── model_biased.pth              # Model after initial training
-    └── model_recalibrated_exp*.pth   # Recalibrated model weights
-
-results/
-└── all_experiments_history.csv       # Global experiment history
+results/exp3_custom_cnn_5classes_YYYYMMDD_HHMMSS/
+├── experiment.log              # Detailed text log
+├── experiment_summary.json     # JSON summary
+├── config.json                 # Run configuration
+├── detailed_results.json       # Complete results
+├── model_biased.pth           # Model before recalibration
+├── model_recalibrated_exp3.pth # Model after recalibration
+├── initial_training_loss.png/svg
+├── loss_curves.png/svg
+├── loss_combined.png/svg
+├── loss_per_class_align.png/svg
+├── confusion_matrices.png/svg
+├── confusion_matrix_diff.png/svg
+├── per_class_comparison.png/svg
+├── accuracy_change.png/svg
+├── metrics_comparison.png/svg
+├── class_distribution.png/svg
+├── misclassification_analysis.png/svg
+├── misclassification_summary.png/svg
+├── experiment3_tcav.png/svg
+├── experiment3_assignments.png/svg
+└── summary_dashboard.png/svg
 ```
 
-## Understanding Results
+## Example Workflows
 
-### Key Metrics
-- **TCAV Score**: How much the model relies on the concept (higher = better)
-- **Accuracy**: Overall classification accuracy
-- **Per-class metrics**: Individual class performance
-
-### What to Look For
-1. **TCAV improvement**: Target class TCAV should increase
-2. **Accuracy maintenance**: Overall accuracy shouldn't drop significantly
-3. **Per-class balance**: Check if minority class improves without hurting others
-4. **Misclassification changes**: Fewer errors for target class
-
-### Interpreting Visualizations
-
-**Confusion Matrix**:
-- Diagonal = correct predictions (shown as percentages)
-- Off-diagonal = misclassifications (shown as percentages)
-- Each cell shows: percentage% (raw count)
-- Green difference = improvements
-
-**Loss Curves**:
-- Total loss should decrease
-- Balance between cls and align loss matters
-
-## Example Workflow
+### Study Effect of Imbalance Ratio
 
 ```bash
-# 1. Check available layers
-python list_layers.py --model_name custom_cnn --detailed
-
-# 2. Run baseline (no imbalance) with Experiment 2
-python main_experiment.py \
-    --experiment 2 \
-    --model_name custom_cnn \
-    --layer features.17 \
-    --target_class zebra \
-    --concept stripes \
-    --dataset_path ./dataset \
-    --concept_path ./concept
-
-# 3. Run with 10% imbalance
-python main_experiment.py \
-    --experiment 2 \
-    --model_name custom_cnn \
-    --layer features.17 \
-    --target_class zebra \
-    --concept stripes \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --imbalance_class zebra \
-    --imbalance_ratio 0.1
-
-# 4. Run Experiment 3 with multiple classes
-python main_experiment.py \
-    --experiment 3 \
-    --model_name custom_cnn \
-    --dataset_path ./dataset \
-    --concept_path ./concept \
-    --class_concept_map "zebra:stripes,horse:mane,deer:antlers" \
-    --imbalance_class zebra \
-    --imbalance_ratio 0.1
-
-# 5. Compare results in all_experiments_history.csv
+for ratio in 0.05 0.10 0.15 0.20 0.25 0.50; do
+    python main_experiment.py \
+        --experiment 3 \
+        --model_name custom_cnn \
+        --dataset_path ./data \
+        --concept_path ./concepts \
+        --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject" \
+        --imbalance_class airplanes \
+        --imbalance_ratio ${ratio} \
+        --pretrain_epochs 50 \
+        --recalib_epochs 20
+done
 ```
 
-## Tips
+### Compare Model Architectures
 
-### Choosing Layers (for Experiments 1 & 2)
-- **Deeper layers** (later in network) often have higher concept sensitivity
-- **Mid-level layers** sometimes work best for visual concepts
-- Use `list_layers.py` to explore options
-- For Experiment 3, layers are automatically selected
+```bash
+for model in custom_cnn vgg16 resnet18 mobilenet_v3_small; do
+    python main_experiment.py \
+        --experiment 3 \
+        --model_name ${model} \
+        --dataset_path ./data \
+        --concept_path ./concepts \
+        --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject" \
+        --imbalance_class airplanes \
+        --imbalance_ratio 0.1 \
+        --pretrain_epochs 50 \
+        --recalib_epochs 20
+done
+```
 
-### Tuning Lambda
-- `lambda_align=0.3`: Prioritize classification
-- `lambda_align=0.5`: Balanced (default)
-- `lambda_align=0.7`: Prioritize concept alignment
+### Use Pretrained Weights
 
-### Handling Severe Imbalance
-- Start with Experiment 2 (uses all data)
-- Use Experiment 3 for multi-class optimization
-- Consider data augmentation for minority class
+```bash
+python main_experiment.py \
+    --experiment 3 \
+    --model_name vgg16 \
+    --pretrained \
+    --dataset_path ./data \
+    --concept_path ./concepts \
+    --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject" \
+    --imbalance_class airplanes \
+    --imbalance_ratio 0.1 \
+    --pretrain_epochs 10 \
+    --recalib_epochs 5
+```
 
-### Setting Up the Background Folder
-- Include diverse images that don't represent any specific concept
-- Good sources: random textures, nature scenes, unrelated objects
-- Aim for 50-200 images for stable CAV training
+## Concept Generation
+
+The framework automatically generates concept images using DeepLabV3 segmentation on first run. The segmentation model:
+
+1. **Identifies subjects**: Extracts the main object (vehicle) from each image
+2. **Creates subject crops**: Saves cropped subject regions as concept images
+3. **Extracts backgrounds**: Saves background regions as random/negative samples
+
+Manual concept generation:
+
+```bash
+python concept_generator.py \
+    --dataset_path ./data/caltech101/101_ObjectCategories \
+    --output_path ./concepts \
+    --classes "airplanes,Motorbikes,car_side,ferry,helicopter" \
+    --max_images 200 \
+    --device cuda
+```
+
+## Results Interpretation
+
+### TCAV Score
+- Measures how sensitive model predictions are to human-defined concepts
+- Range: 0-1 (higher = more aligned with concept)
+- Target: Increase after recalibration
+
+### Accuracy Change
+- Per-class accuracy before vs. after recalibration
+- Positive change indicates improvement
+- Watch for trade-offs between classes
+
+### Confusion Matrix
+- Shows classification patterns before/after
+- Look for reduced confusion between similar classes
+- Difference matrix highlights improvements
+
+## Testing & Debugging
+
+### Quick Debug Run
+
+Test that all components work without running a full experiment:
+
+```bash
+# Test imports, models, CAV, visualizations (no data download)
+python debug_run.py --skip-training
+
+# Test everything including data loading
+python debug_run.py
+
+# Only test visualizations
+python debug_run.py --test-viz
+
+# Full pipeline test (slow, runs mini experiment)
+python debug_run.py --full-pipeline
+```
+
+### Unit Tests (pytest)
+
+```bash
+# Install pytest
+pip install pytest
+
+# Run all tests
+pytest test_components.py -v
+
+# Run specific test class
+pytest test_components.py -v -k "TestModels"
+
+# Run with coverage
+pip install pytest-cov
+pytest test_components.py -v --cov=. --cov-report=html
+
+# Skip slow tests (data download)
+pytest test_components.py -v -m "not slow"
+```
+
+### Test Categories
+
+| Test Class | Tests |
+|------------|-------|
+| `TestModels` | Model creation, forward pass, gradients |
+| `TestCAV` | CAV training with different classifiers |
+| `TestEvaluation` | Metric computation, confusion matrix |
+| `TestVisualizations` | Plot generation, N-class support |
+| `TestDataloader` | Data loading, transforms |
+| `TestLogger` | Logging system functionality |
+| `TestIntegration` | End-to-end component tests |
 
 ## Troubleshooting
 
-**"Background folder not found" error**
+### CUDA Out of Memory
 ```bash
-# Create a background folder under your concept directory
-mkdir -p ./concept/background
-# Add random/negative images to this folder
+# Reduce batch size
+--batch_size 16
+
+# Use smaller model
+--model_name custom_cnn_small
 ```
 
-**"Layer not found" error**
+### No Concept Images Found
 ```bash
-python list_layers.py --model_name YOUR_MODEL --detailed
+# Manually generate concepts first
+python concept_generator.py \
+    --dataset_path ./data/caltech101/101_ObjectCategories \
+    --output_path ./concepts \
+    --classes "your,class,names"
 ```
 
-**Low TCAV improvement**
-- Try deeper layers (for Exp 1 & 2)
-- Increase lambda_align
-- Check concept image quality
-- For Exp 3, the system automatically selects layers with lowest TCAV scores
+### Class Not Found in Caltech-101
+Check available classes:
+```python
+from torchvision.datasets import Caltech101
+ds = Caltech101(root='./data', download=True)
+print(ds.categories)
+```
 
-**Accuracy drops significantly**
-- Reduce lambda_align (try 0.3)
-- Use Experiment 2 instead of 1
-- Increase recalib_epochs
+## Citation
 
-**Out of memory**
-- Reduce batch_size
-- Use custom_cnn_small
-- Try CPU (slower but uses less memory)
+If you use this code, please cite:
 
-**Validation accuracy differs from training**
-- This is expected behavior - both sets now share the same imbalance
-- Check `class_distribution.png` to verify the distribution
-
-## Changelog
-
-### Version 2.0
-- Added Experiment 3: Joint multi-class optimization with automatic layer selection
-- Changed random/negative samples source to dedicated `background` folder
-- Fixed validation set to use same imbalance as training set
-- Fixed confusion matrices to show percentages in all cells
-- Added per-class alignment loss tracking for Experiment 3
-- Added new visualizations for Experiment 3 results
-- Updated documentation and examples
+```bibtex
+@article{tcav_recalibration,
+  title={Targeted Layer Recalibration in CNNs: Enhancing Concept Alignment},
+  author={...},
+  journal={...},
+  year={2024}
+}
+```
 
 ## License
 
-Apache License 2.0
+MIT License - see LICENSE file for details.

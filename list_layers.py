@@ -1,183 +1,187 @@
 #!/usr/bin/env python3
 """
-Helper script to list available layers for different CNN models.
+Utility to list all layers in a CNN model suitable for TCAV analysis.
 
-Supports:
-- Custom CNN models (untrained)
-- Pretrained models (VGG16, ResNet, etc.)
+This helps identify which layers can be targeted for recalibration.
+Typically, convolutional layers in the middle-to-late stages of the
+network are most suitable for concept alignment.
 
 Usage:
-    python list_layers.py --model_name custom_cnn
-    python list_layers.py --model_name vgg16 --filter conv
+    python list_layers.py --model_name vgg16
+    python list_layers.py --model_name custom_cnn --num_classes 5
 """
 
 import argparse
-
+import torch
 import torch.nn as nn
-
-from utils_imbalanced import (
-    load_model,
-    get_model_layers,
-    get_suggested_layers
-)
+from utils import load_model
 
 
-def list_all_modules(model, prefix='', depth=0, max_depth=4):
-    """Recursively list all modules in the model."""
-    modules = []
-
+def list_all_layers(model: nn.Module, indent: int = 0) -> None:
+    """Recursively list all layers in a model."""
     for name, module in model.named_children():
-        full_name = f"{prefix}.{name}" if prefix else name
-        module_type = type(module).__name__
-
-        # Count parameters
-        num_params = sum(p.numel() for p in module.parameters(recurse=False))
-
-        modules.append({
-            'name': full_name,
-            'type': module_type,
-            'depth': depth,
-            'num_params': num_params,
-            'has_params': num_params > 0
-        })
-
-        if depth < max_depth:
-            modules.extend(list_all_modules(module, full_name, depth + 1, max_depth))
-
-    return modules
+        print("  " * indent + f"{name}: {module.__class__.__name__}")
+        if len(list(module.children())) > 0:
+            list_all_layers(module, indent + 1)
 
 
-def print_model_summary(model, model_name):
-    """Print model architecture summary."""
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+def list_candidate_layers(model: nn.Module, 
+                         layer_types: tuple = (nn.Conv2d, nn.MaxPool2d)) -> list:
+    """
+    List layers suitable for TCAV analysis.
+    
+    Args:
+        model: PyTorch model
+        layer_types: Types of layers to consider
+        
+    Returns:
+        List of (name, module) tuples
+    """
+    candidates = []
+    for name, module in model.named_modules():
+        if isinstance(module, layer_types):
+            candidates.append((name, module))
+    return candidates
 
-    print(f"\n{'=' * 70}")
-    print(f"MODEL SUMMARY: {model_name}")
-    print(f"{'=' * 70}")
-    print(f"Total parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}")
-    print(f"{'=' * 70}")
+
+def analyze_layer(model: nn.Module, layer_name: str, input_size: int = 224) -> dict:
+    """
+    Analyze a specific layer's properties.
+    
+    Args:
+        model: PyTorch model
+        layer_name: Name of the layer to analyze
+        input_size: Input image size
+        
+    Returns:
+        Dictionary with layer properties
+    """
+    # Get the layer
+    try:
+        layer = model.get_submodule(layer_name)
+    except AttributeError:
+        return {"error": f"Layer '{layer_name}' not found"}
+    
+    # Create a hook to capture output shape
+    output_shape = None
+    
+    def hook(module, input, output):
+        nonlocal output_shape
+        output_shape = output.shape
+    
+    handle = layer.register_forward_hook(hook)
+    
+    # Run a forward pass
+    model.eval()
+    with torch.no_grad():
+        dummy_input = torch.randn(1, 3, input_size, input_size)
+        try:
+            model(dummy_input)
+        except Exception as e:
+            handle.remove()
+            return {"error": str(e)}
+    
+    handle.remove()
+    
+    # Calculate properties
+    if output_shape is not None:
+        activation_size = output_shape.numel()
+        return {
+            "name": layer_name,
+            "type": layer.__class__.__name__,
+            "output_shape": list(output_shape),
+            "activation_size": activation_size,
+            "suitable_for_cav": activation_size > 100  # Heuristic
+        }
+    
+    return {"error": "Could not determine output shape"}
 
 
 def main():
-    parser = argparse.ArgumentParser(description="List available layers for CNN models")
-    parser.add_argument("--model_name", type=str, default="custom_cnn",
-                        choices=["custom_cnn", "custom_cnn_small", "custom_cnn_large",
-                                 "vgg16", "resnet50", "resnet18", "inception_v3",
-                                 "mobilenet_v3_small", "mobilenet_v3_large"],
-                        help="Model architecture")
-    parser.add_argument("--filter", type=str, default=None,
-                        help="Filter layers by type (e.g., conv, pool, bn)")
-    parser.add_argument("--detailed", action="store_true",
-                        help="Show detailed layer information")
-    parser.add_argument("--num_classes", type=int, default=3,
-                        help="Number of output classes")
-    parser.add_argument("--pretrained", action="store_true",
-                        help="Load pretrained weights (for standard models)")
-
-    args = parser.parse_args()
-
-    print(f"\nLoading {args.model_name} model...")
-
-    # Load model
-    model = load_model(
-        args.model_name,
-        num_classes=args.num_classes,
-        pretrained=args.pretrained
+    parser = argparse.ArgumentParser(
+        description="List CNN layers suitable for TCAV analysis"
     )
+    parser.add_argument("--model_name", type=str, default="custom_cnn",
+                       help="Model architecture name")
+    parser.add_argument("--num_classes", type=int, default=5,
+                       help="Number of output classes")
+    parser.add_argument("--input_size", type=int, default=224,
+                       help="Input image size")
+    parser.add_argument("--detailed", action="store_true",
+                       help="Show detailed layer analysis")
+    parser.add_argument("--all", action="store_true",
+                       help="Show all layers (not just candidates)")
+    
+    args = parser.parse_args()
+    
+    print(f"\n{'=' * 60}")
+    print(f"Layer Analysis for {args.model_name}")
+    print(f"{'=' * 60}")
+    
+    # Load model
+    model = load_model(args.model_name, num_classes=args.num_classes)
     model.eval()
-
-    # Print summary
-    print_model_summary(model, args.model_name)
-
+    
+    # Count parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\nTotal parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    
+    if args.all:
+        print(f"\n{'=' * 60}")
+        print("All Layers (Hierarchical)")
+        print(f"{'=' * 60}")
+        list_all_layers(model)
+    
+    # List candidate layers
+    print(f"\n{'=' * 60}")
+    print("Candidate Layers for TCAV Analysis")
+    print(f"{'=' * 60}")
+    
+    candidates = list_candidate_layers(model)
+    
+    print(f"\nFound {len(candidates)} candidate layers:\n")
+    print(f"{'Name':<45} {'Type':<20}")
+    print("-" * 65)
+    
+    for name, module in candidates:
+        print(f"{name:<45} {module.__class__.__name__:<20}")
+    
     if args.detailed:
-        # List all modules with hierarchy
-        print(f"\nDetailed Layer Hierarchy:")
-        print("-" * 70)
-
-        modules = list_all_modules(model)
-
-        for mod in modules:
-            indent = "  " * mod['depth']
-            params_str = f"[{mod['num_params']:,} params]" if mod['has_params'] else ""
-
-            if args.filter is None or args.filter.lower() in mod['type'].lower():
-                print(f"{indent}{mod['name']:<40} ({mod['type']}) {params_str}")
-
-    # List layers suitable for TCAV
-    print(f"\n{'=' * 70}")
-    print("Layers suitable for TCAV analysis (Conv2d, MaxPool2d):")
-    print("-" * 70)
-
-    layers = get_model_layers(model, layer_types=(nn.Conv2d, nn.MaxPool2d))
-    suggested = get_suggested_layers(args.model_name)
-
-    for i, layer in enumerate(layers):
-        if args.filter is None or args.filter.lower() in layer.lower():
-            marker = " ★ SUGGESTED" if layer in suggested else ""
-            print(f"  [{i:3d}] {layer}{marker}")
-
-    print(f"\nTotal: {len(layers)} layers")
-
-    # Print suggested layers
-    if suggested:
-        print(f"\n{'=' * 70}")
-        print(f"Recommended layers for {args.model_name}:")
-        print("-" * 70)
-        for layer in suggested:
-            print(f"  → {layer}")
-
-    # Print example usage
-    print(f"\n{'=' * 70}")
-    print("Example Commands:")
-    print("-" * 70)
-
-    example_layer = suggested[0] if suggested else layers[len(layers) // 2] if layers else "conv1"
-
-    print(f"""
-  # Experiment 1: Target class only (with imbalance)
-  python main_experiment.py \\
-      --experiment 1 \\
-      --model_name {args.model_name} \\
-      --layer {example_layer} \\
-      --target_class zebra \\
-      --concept stripes \\
-      --dataset_path ./dataset \\
-      --concept_path ./concept \\
-      --imbalance_class zebra \\
-      --imbalance_ratio 0.1
-
-  # Experiment 2: Full dataset with selective alignment
-  python main_experiment.py \\
-      --experiment 2 \\
-      --model_name {args.model_name} \\
-      --layer {example_layer} \\
-      --target_class zebra \\
-      --concept stripes \\
-      --dataset_path ./dataset \\
-      --concept_path ./concept \\
-      --imbalance_class zebra \\
-      --imbalance_ratio 0.25
-
-  # Experiment 3: Joint multi-class optimization (automatic layer selection)
-  python main_experiment.py \\
-      --experiment 3 \\
-      --model_name {args.model_name} \\
-      --dataset_path ./dataset \\
-      --concept_path ./concept \\
-      --class_concept_map "zebra:stripes,horse:mane,deer:antlers" \\
-      --imbalance_class zebra \\
-      --imbalance_ratio 0.1
-    """)
-
-    # Custom CNN specific info
-    if 'custom' in args.model_name.lower():
-        print(f"\n{'=' * 70}")
-        print("Note: Custom CNN models are untrained (random weights)")
-        print("You should train the model on your dataset before recalibration")
-        print("or use the recalibration as part of the training process.")
-        print(f"{'=' * 70}")
+        print(f"\n{'=' * 60}")
+        print("Detailed Layer Analysis")
+        print(f"{'=' * 60}")
+        
+        for name, _ in candidates[-10:]:  # Analyze last 10 candidates
+            info = analyze_layer(model, name, args.input_size)
+            if "error" not in info:
+                print(f"\n{name}:")
+                print(f"  Type: {info['type']}")
+                print(f"  Output shape: {info['output_shape']}")
+                print(f"  Activation size: {info['activation_size']:,}")
+                print(f"  Suitable for CAV: {info['suitable_for_cav']}")
+            else:
+                print(f"\n{name}: {info['error']}")
+    
+    # Suggested layers
+    print(f"\n{'=' * 60}")
+    print("Suggested Layers for Recalibration")
+    print(f"{'=' * 60}")
+    
+    # Suggest layers from the middle to late stages
+    n_candidates = len(candidates)
+    if n_candidates >= 5:
+        suggested = [candidates[i][0] for i in 
+                    [n_candidates//4, n_candidates//2, 3*n_candidates//4, n_candidates-2, n_candidates-1]]
+    else:
+        suggested = [c[0] for c in candidates]
+    
+    print("\nRecommended layers (from early to late):")
+    for i, name in enumerate(suggested):
+        print(f"  {i+1}. {name}")
+    
+    print(f"\n{'=' * 60}")
 
 
 if __name__ == "__main__":

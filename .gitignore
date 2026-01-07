@@ -110,4 +110,4 @@ job*.err
 
 # Dataset
 dataset/
-concept/
+concept/*.pth

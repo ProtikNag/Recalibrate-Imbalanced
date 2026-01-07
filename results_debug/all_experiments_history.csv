@@ -1,0 +1,2 @@
+timestamp,experiment,model_name,layer,target_class,concept,imbalance_class,imbalance_ratio,lambda_align,epochs,accuracy_before,accuracy_after,tcav_before,tcav_after,f1_before,f1_after
+2026-01-07T14:37:38.927538,3,custom_cnn_small,multiple,multiple,multiple,airplanes,0.5,0.5,2,0.9916666666666667,0.9958333333333333,0.0,0.0,0.9905652960138376,0.9952977135131957
