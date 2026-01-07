@@ -1,821 +1,757 @@
-#!/usr/bin/env python3
 """
-Visualization module for TCAV-Based Recalibration experiments.
+Visualization utilities for VL-CAV experiments.
 
-Supports N-class classification with:
-- Loss curves (total, classification, alignment, per-class)
-- Confusion matrices with percentages
-- Per-class accuracy comparisons
-- Metrics comparison charts
+Creates publication-quality visualizations with academic styling:
+- Training curves
+- Confusion matrices
 - Class distribution plots
-- Misclassification analysis
 - TCAV score comparisons
-- Summary dashboards
-
-All visualizations are generated in both PNG and SVG formats.
+- Correlation matrices
+- Performance comparisons
 """
 
-import os
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
-from typing import Dict, List, Optional, Any, Tuple
+import numpy as np
+from typing import Dict, List, Optional, Tuple, Union
+import os
+from sklearn.metrics import confusion_matrix
+import warnings
+warnings.filterwarnings('ignore')
 
 
-class ResultVisualizer:
+# Academic color palette
+COLORS = {
+    'primary': '#2E4057',      # Dark blue-gray
+    'secondary': '#048A81',    # Teal
+    'accent1': '#54C6EB',      # Light blue
+    'accent2': '#8EE3EF',      # Pale cyan
+    'accent3': '#F7A278',      # Coral
+    'accent4': '#F25C54',      # Red
+    'positive': '#2E7D32',     # Green
+    'negative': '#C62828',     # Red
+    'neutral': '#757575',      # Gray
+    'background': '#FAFAFA',   # Light gray
+}
+
+# Color palette for multiple classes
+CLASS_COLORS = [
+    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+    '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5'
+]
+
+
+def set_academic_style():
+    """Set matplotlib style for academic publications."""
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman', 'DejaVu Serif'],
+        'font.size': 11,
+        'axes.labelsize': 12,
+        'axes.titlesize': 13,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'legend.fontsize': 10,
+        'figure.titlesize': 14,
+        'axes.linewidth': 1.0,
+        'axes.edgecolor': '#333333',
+        'axes.labelcolor': '#333333',
+        'text.color': '#333333',
+        'xtick.color': '#333333',
+        'ytick.color': '#333333',
+        'grid.alpha': 0.3,
+        'grid.linestyle': '--',
+        'figure.facecolor': 'white',
+        'axes.facecolor': 'white',
+        'savefig.facecolor': 'white',
+        'savefig.edgecolor': 'white',
+        'savefig.dpi': 300,
+        'savefig.bbox': 'tight',
+        'savefig.pad_inches': 0.1,
+    })
+
+
+def save_figure(fig: plt.Figure, path: str, formats: List[str] = ['png', 'svg']):
     """
-    Generate comprehensive visualizations for experiment results.
-    Supports any number of classes.
+    Save figure in multiple formats.
+    
+    Args:
+        fig: Matplotlib figure
+        path: Base path without extension
+        formats: List of formats to save
     """
+    for fmt in formats:
+        fig.savefig(f"{path}.{fmt}", format=fmt, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_training_curves(history: Dict[str, List[float]], 
+                         output_path: str,
+                         title: str = "Training Progress",
+                         formats: List[str] = ['png', 'svg']):
+    """
+    Plot training and validation curves.
     
-    def __init__(self, results_dir: str, style: str = 'seaborn-v0_8-whitegrid'):
-        self.results_dir = results_dir
-        os.makedirs(results_dir, exist_ok=True)
-        
-        # Try to set style, fall back if not available
-        try:
-            plt.style.use(style)
-        except:
-            try:
-                plt.style.use('seaborn-whitegrid')
-            except:
-                plt.style.use('default')
-        
-        # Color scheme
-        self.colors = {
-            'before': '#3498db',      # Blue
-            'after': '#2ecc71',       # Green
-            'change_pos': '#27ae60',  # Dark green
-            'change_neg': '#e74c3c',  # Red
-            'highlight': '#f39c12',   # Orange
-            'neutral': '#95a5a6'      # Gray
-        }
-        
-        # Color palette for multiple classes
-        self.class_colors = plt.cm.Set2.colors
+    Args:
+        history: Dictionary with 'train_loss', 'val_loss', 'val_accuracy'
+        output_path: Path to save figure (without extension)
+        title: Figure title
+        formats: Output formats
+    """
+    set_academic_style()
     
-    def _save_figure(self, fig: plt.Figure, filename: str, close: bool = True):
-        """Save figure in both PNG and SVG formats."""
-        base_name = os.path.splitext(filename)[0]
-        
-        # Save PNG
-        png_path = os.path.join(self.results_dir, f"{base_name}.png")
-        fig.savefig(png_path, dpi=150, bbox_inches='tight')
-        
-        # Save SVG
-        svg_path = os.path.join(self.results_dir, f"{base_name}.svg")
-        fig.savefig(svg_path, format='svg', bbox_inches='tight')
-        
-        if close:
-            plt.close(fig)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     
-    def _get_class_color(self, idx: int) -> Tuple:
-        """Get color for a class index."""
-        return self.class_colors[idx % len(self.class_colors)]
+    epochs = range(1, len(history['train_loss']) + 1)
     
-    def plot_initial_training(self, loss_history: Dict, epochs: int,
-                             filename: str = "initial_training_loss"):
-        """Plot initial/pre-training loss curves."""
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        x = range(1, epochs + 1)
-        
-        has_loss_plotted = False
-        
-        if 'train_loss' in loss_history:
-            ax.plot(x, loss_history['train_loss'], 'b-o', linewidth=2,
-                   markersize=4, label='Train Loss')
-            has_loss_plotted = True
-        if 'val_loss' in loss_history:
-            ax.plot(x, loss_history['val_loss'], 'r-s', linewidth=2,
-                   markersize=4, label='Val Loss')
-            has_loss_plotted = True
-        if 'loss' in loss_history and not has_loss_plotted:
-            ax.plot(x, loss_history['loss'], 'b-o', linewidth=2,
-                   markersize=4, label='Loss')
-            has_loss_plotted = True
-        if 'total' in loss_history and not has_loss_plotted:
-            ax.plot(x, loss_history['total'], 'b-o', linewidth=2,
-                   markersize=4, label='Total Loss')
-        
-        # Accuracy on secondary axis
-        ax2 = None
-        if 'train_acc' in loss_history:
-            ax2 = ax.twinx()
-            ax2.plot(x, loss_history['train_acc'], 'g--^', linewidth=2,
-                    markersize=4, label='Train Acc')
-            ax2.set_ylabel('Accuracy', color='g')
-            ax2.tick_params(axis='y', labelcolor='g')
-            ax2.set_ylim(0, 1.1)
-        if 'val_acc' in loss_history:
-            if ax2 is None:
-                ax2 = ax.twinx()
-                ax2.set_ylabel('Accuracy', color='g')
-                ax2.tick_params(axis='y', labelcolor='g')
-                ax2.set_ylim(0, 1.1)
-            ax2.plot(x, loss_history['val_acc'], 'm--v', linewidth=2,
-                    markersize=4, label='Val Acc')
-        
-        ax.set_title('Initial Training Progress', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Loss')
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc='upper right')
-        
-        if ax2 is not None:
-            ax2.legend(loc='lower right')
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
+    # Loss plot
+    ax1 = axes[0]
+    ax1.plot(epochs, history['train_loss'], '-', color=COLORS['primary'], 
+             linewidth=2, label='Training Loss', marker='o', markersize=4)
+    if 'val_loss' in history:
+        ax1.plot(epochs, history['val_loss'], '--', color=COLORS['accent3'],
+                 linewidth=2, label='Validation Loss', marker='s', markersize=4)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title('Loss Curves')
+    ax1.legend(frameon=True, fancybox=False, edgecolor='gray')
+    ax1.grid(True, alpha=0.3)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
     
-    def plot_loss_curves(self, loss_history: Dict, epochs: int,
-                        filename: str = "loss_curves"):
-        """Plot recalibration loss curves."""
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        x = range(1, epochs + 1)
-        
-        # Total loss
-        axes[0].plot(x, loss_history['total'], 'b-o', linewidth=2, markersize=4)
-        axes[0].set_title('Total Loss', fontsize=14, fontweight='bold')
-        axes[0].set_xlabel('Epoch')
-        axes[0].set_ylabel('Loss')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Classification loss
-        axes[1].plot(x, loss_history['cls'], 'orange', marker='s', linewidth=2, markersize=4)
-        axes[1].set_title('Classification Loss', fontsize=14, fontweight='bold')
-        axes[1].set_xlabel('Epoch')
-        axes[1].set_ylabel('Loss')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Alignment loss
-        axes[2].plot(x, loss_history['align'], 'g-^', linewidth=2, markersize=4)
-        axes[2].set_title('Alignment Loss', fontsize=14, fontweight='bold')
-        axes[2].set_xlabel('Epoch')
-        axes[2].set_ylabel('Loss')
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
-        
-        # Combined plot
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(x, loss_history['total'], 'b-o', label='Total', linewidth=2)
-        ax.plot(x, loss_history['cls'], 'orange', marker='s', label='Classification', linewidth=2)
-        ax.plot(x, loss_history['align'], 'g-^', label='Alignment', linewidth=2)
-        ax.set_title('Training Loss Components', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Loss')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        self._save_figure(fig, 'loss_combined')
-        
-        # Per-class alignment losses if available (Experiment 3)
-        if 'per_class_align' in loss_history and loss_history['per_class_align']:
-            fig, ax = plt.subplots(figsize=(12, 6))
-            
-            for i, (class_name, losses) in enumerate(loss_history['per_class_align'].items()):
-                ax.plot(x, losses, marker='o', linewidth=2, markersize=4, 
-                       label=class_name, color=self._get_class_color(i))
-            
-            ax.set_title('Per-Class Alignment Loss', fontsize=14, fontweight='bold')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('Alignment Loss')
-            ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left')
-            ax.grid(True, alpha=0.3)
-            
-            plt.tight_layout()
-            self._save_figure(fig, 'loss_per_class_align')
+    # Accuracy plot
+    ax2 = axes[1]
+    if 'train_accuracy' in history:
+        ax2.plot(epochs, history['train_accuracy'], '-', color=COLORS['primary'],
+                 linewidth=2, label='Training Accuracy', marker='o', markersize=4)
+    if 'val_accuracy' in history:
+        ax2.plot(epochs, history['val_accuracy'], '--', color=COLORS['secondary'],
+                 linewidth=2, label='Validation Accuracy', marker='s', markersize=4)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_title('Accuracy Curves')
+    ax2.legend(frameon=True, fancybox=False, edgecolor='gray')
+    ax2.grid(True, alpha=0.3)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.set_ylim([0, 1])
     
-    def plot_confusion_matrices(self, cm_before: List[List], cm_after: List[List],
-                               class_names: List[str],
-                               filename: str = "confusion_matrices"):
-        """Plot confusion matrices before and after recalibration with percentages."""
-        n_classes = len(class_names)
-        
-        # Adjust figure size based on number of classes
-        fig_width = max(14, 6 + n_classes)
-        fig_height = max(6, 3 + n_classes * 0.5)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(fig_width, fig_height))
-        
-        cm_before = np.array(cm_before)
-        cm_after = np.array(cm_after)
-        
-        # Normalize by row
-        cm_before_norm = cm_before.astype('float') / cm_before.sum(axis=1, keepdims=True)
-        cm_after_norm = cm_after.astype('float') / cm_after.sum(axis=1, keepdims=True)
-        
-        cm_before_norm = np.nan_to_num(cm_before_norm)
-        cm_after_norm = np.nan_to_num(cm_after_norm)
-        
-        # Create annotations with percentages and counts
-        def create_annotations(cm_norm, cm_raw):
-            annot = []
-            for i in range(len(cm_norm)):
-                row = []
-                for j in range(len(cm_norm[i])):
-                    pct = cm_norm[i][j] * 100
-                    cnt = int(cm_raw[i][j])
-                    row.append(f'{pct:.1f}%\n({cnt})')
-                annot.append(row)
-            return np.array(annot)
-        
-        annot_before = create_annotations(cm_before_norm, cm_before)
-        annot_after = create_annotations(cm_after_norm, cm_after)
-        
-        # Plot heatmaps
-        sns.heatmap(cm_before_norm, annot=annot_before, fmt='', cmap='Blues',
-                   xticklabels=class_names, yticklabels=class_names, ax=axes[0],
-                   cbar_kws={'label': 'Proportion'})
-        axes[0].set_title('Before Recalibration', fontsize=14, fontweight='bold')
-        axes[0].set_xlabel('Predicted')
-        axes[0].set_ylabel('True')
-        
-        sns.heatmap(cm_after_norm, annot=annot_after, fmt='', cmap='Greens',
-                   xticklabels=class_names, yticklabels=class_names, ax=axes[1],
-                   cbar_kws={'label': 'Proportion'})
-        axes[1].set_title('After Recalibration', fontsize=14, fontweight='bold')
-        axes[1].set_xlabel('Predicted')
-        axes[1].set_ylabel('True')
-        
-        # Rotate labels if many classes
-        if n_classes > 5:
-            for ax in axes:
-                ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-                ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
-        
-        # Difference plot
-        self._plot_confusion_difference(cm_before_norm, cm_after_norm, class_names)
+    fig.suptitle(title, fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
     
-    def _plot_confusion_difference(self, cm_before_norm: np.ndarray, 
-                                   cm_after_norm: np.ndarray,
-                                   class_names: List[str]):
-        """Plot confusion matrix difference."""
-        n_classes = len(class_names)
-        fig_size = max(8, 4 + n_classes * 0.5)
-        
-        fig, ax = plt.subplots(figsize=(fig_size, fig_size))
-        
-        diff = cm_after_norm - cm_before_norm
-        
-        # Custom colormap: red for negative, green for positive
-        colors = ['#e74c3c', '#ffffff', '#2ecc71']
-        n_bins = 100
-        cmap = LinearSegmentedColormap.from_list('diff', colors, N=n_bins)
-        
-        # Create annotations
-        annot = []
-        for i in range(len(diff)):
-            row = []
-            for j in range(len(diff[i])):
-                val = diff[i][j] * 100
-                sign = '+' if val > 0 else ''
-                row.append(f'{sign}{val:.1f}%')
-            annot.append(row)
-        annot = np.array(annot)
-        
-        vmax = max(abs(diff.min()), abs(diff.max()))
-        
-        sns.heatmap(diff, annot=annot, fmt='', cmap=cmap,
-                   xticklabels=class_names, yticklabels=class_names,
-                   center=0, vmin=-vmax, vmax=vmax, ax=ax,
-                   cbar_kws={'label': 'Change in Proportion'})
-        
-        ax.set_title('Confusion Matrix Change\n(After - Before)', 
-                    fontsize=14, fontweight='bold')
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('True')
-        
-        if n_classes > 5:
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-        
-        plt.tight_layout()
-        self._save_figure(fig, 'confusion_matrix_diff')
+    save_figure(fig, output_path, formats)
+
+
+def plot_recalibration_losses(history: Dict[str, List[float]],
+                              output_path: str,
+                              formats: List[str] = ['png', 'svg']):
+    """
+    Plot recalibration training curves with separate loss components.
     
-    def plot_per_class_comparison(self, per_class_before: Dict, per_class_after: Dict,
-                                  class_names: List[str],
-                                  filename: str = "per_class_comparison"):
-        """Plot per-class metrics comparison."""
-        n_classes = len(class_names)
-        
-        # Adjust layout based on number of classes
-        fig_width = max(12, 8 + n_classes * 0.5)
-        fig, axes = plt.subplots(2, 2, figsize=(fig_width, 10))
-        
-        metrics = ['accuracy', 'precision', 'recall', 'f1']
-        titles = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
-        
-        x = np.arange(n_classes)
-        width = 0.35
-        
-        for ax, metric, title in zip(axes.flat, metrics, titles):
-            before_vals = [per_class_before[c][metric] for c in class_names]
-            after_vals = [per_class_after[c][metric] for c in class_names]
-            
-            bars1 = ax.bar(x - width/2, before_vals, width, label='Before',
-                          color=self.colors['before'], alpha=0.8)
-            bars2 = ax.bar(x + width/2, after_vals, width, label='After',
-                          color=self.colors['after'], alpha=0.8)
-            
-            ax.set_title(title, fontsize=12, fontweight='bold')
-            ax.set_xticks(x)
-            ax.set_xticklabels(class_names, rotation=45 if n_classes > 5 else 0, ha='right')
-            ax.set_ylim(0, 1.1)
-            ax.legend()
-            ax.grid(axis='y', alpha=0.3)
-            
-            # Add value labels
-            for bar in bars1:
-                height = bar.get_height()
-                ax.annotate(f'{height:.2f}',
-                           xy=(bar.get_x() + bar.get_width()/2, height),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=8)
-            for bar in bars2:
-                height = bar.get_height()
-                ax.annotate(f'{height:.2f}',
-                           xy=(bar.get_x() + bar.get_width()/2, height),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=8)
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
+    Args:
+        history: Dictionary with 'train_loss', 'train_cls_loss', 'train_align_loss'
+        output_path: Path to save figure
+        formats: Output formats
+    """
+    set_academic_style()
     
-    def plot_accuracy_change(self, per_class_before: Dict, per_class_after: Dict,
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+    
+    epochs = range(1, len(history['train_loss']) + 1)
+    
+    # Total loss
+    ax1 = axes[0]
+    ax1.plot(epochs, history['train_loss'], '-', color=COLORS['primary'],
+             linewidth=2, marker='o', markersize=4)
+    ax1.fill_between(epochs, history['train_loss'], alpha=0.2, color=COLORS['primary'])
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title('Total Loss')
+    ax1.grid(True, alpha=0.3)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    
+    # Classification loss
+    ax2 = axes[1]
+    ax2.plot(epochs, history['train_cls_loss'], '-', color=COLORS['secondary'],
+             linewidth=2, marker='o', markersize=4)
+    ax2.fill_between(epochs, history['train_cls_loss'], alpha=0.2, color=COLORS['secondary'])
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Loss')
+    ax2.set_title('Classification Loss')
+    ax2.grid(True, alpha=0.3)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    
+    # Alignment loss
+    ax3 = axes[2]
+    ax3.plot(epochs, history['train_align_loss'], '-', color=COLORS['accent3'],
+             linewidth=2, marker='o', markersize=4)
+    ax3.fill_between(epochs, history['train_align_loss'], alpha=0.2, color=COLORS['accent3'])
+    ax3.set_xlabel('Epoch')
+    ax3.set_ylabel('Loss')
+    ax3.set_title('Alignment Loss')
+    ax3.grid(True, alpha=0.3)
+    ax3.spines['top'].set_visible(False)
+    ax3.spines['right'].set_visible(False)
+    
+    fig.suptitle('Recalibration Training Progress', fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray,
+                          class_names: List[str],
+                          output_path: str,
+                          title: str = "Confusion Matrix",
+                          normalize: bool = True,
+                          formats: List[str] = ['png', 'svg']):
+    """
+    Plot confusion matrix with academic styling.
+    
+    Args:
+        y_true: True labels
+        y_pred: Predicted labels
+        class_names: List of class names
+        output_path: Path to save figure
+        title: Figure title
+        normalize: Whether to normalize the matrix
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    cm = confusion_matrix(y_true, y_pred)
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        fmt = '.2f'
+    else:
+        fmt = 'd'
+    
+    fig, ax = plt.subplots(figsize=(8, 7))
+    
+    # Custom colormap
+    cmap = LinearSegmentedColormap.from_list(
+        'academic_blue', ['#FFFFFF', '#E3F2FD', '#90CAF9', '#42A5F5', '#1976D2', '#0D47A1']
+    )
+    
+    sns.heatmap(cm, annot=True, fmt=fmt, cmap=cmap,
+                xticklabels=class_names, yticklabels=class_names,
+                ax=ax, cbar_kws={'shrink': 0.8},
+                linewidths=0.5, linecolor='white',
+                annot_kws={'size': 9})
+    
+    ax.set_xlabel('Predicted Label', fontweight='bold')
+    ax.set_ylabel('True Label', fontweight='bold')
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=15)
+    
+    # Rotate labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_confusion_matrix_comparison(y_true: np.ndarray,
+                                     y_pred_before: np.ndarray,
+                                     y_pred_after: np.ndarray,
+                                     class_names: List[str],
+                                     output_path: str,
+                                     formats: List[str] = ['png', 'svg']):
+    """
+    Plot before/after confusion matrices side by side.
+    
+    Args:
+        y_true: True labels
+        y_pred_before: Predictions before recalibration
+        y_pred_after: Predictions after recalibration
+        class_names: List of class names
+        output_path: Path to save figure
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    cm_before = confusion_matrix(y_true, y_pred_before)
+    cm_after = confusion_matrix(y_true, y_pred_after)
+    
+    # Normalize
+    cm_before_norm = cm_before.astype('float') / cm_before.sum(axis=1)[:, np.newaxis]
+    cm_after_norm = cm_after.astype('float') / cm_after.sum(axis=1)[:, np.newaxis]
+    
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    
+    cmap = LinearSegmentedColormap.from_list(
+        'academic_blue', ['#FFFFFF', '#E3F2FD', '#90CAF9', '#42A5F5', '#1976D2', '#0D47A1']
+    )
+    
+    # Before
+    sns.heatmap(cm_before_norm, annot=True, fmt='.2f', cmap=cmap,
+                xticklabels=class_names, yticklabels=class_names,
+                ax=axes[0], cbar=False, linewidths=0.5, linecolor='white',
+                annot_kws={'size': 8})
+    axes[0].set_title('Before Recalibration', fontweight='bold')
+    axes[0].set_xlabel('Predicted')
+    axes[0].set_ylabel('True')
+    
+    # After
+    sns.heatmap(cm_after_norm, annot=True, fmt='.2f', cmap=cmap,
+                xticklabels=class_names, yticklabels=class_names,
+                ax=axes[1], cbar=False, linewidths=0.5, linecolor='white',
+                annot_kws={'size': 8})
+    axes[1].set_title('After Recalibration', fontweight='bold')
+    axes[1].set_xlabel('Predicted')
+    axes[1].set_ylabel('True')
+    
+    # Difference
+    cm_diff = cm_after_norm - cm_before_norm
+    cmap_diff = LinearSegmentedColormap.from_list(
+        'diff', [COLORS['negative'], '#FFFFFF', COLORS['positive']]
+    )
+    
+    vmax = max(abs(cm_diff.min()), abs(cm_diff.max()))
+    sns.heatmap(cm_diff, annot=True, fmt='.2f', cmap=cmap_diff,
+                xticklabels=class_names, yticklabels=class_names,
+                ax=axes[2], center=0, vmin=-vmax, vmax=vmax,
+                linewidths=0.5, linecolor='white',
+                annot_kws={'size': 8})
+    axes[2].set_title('Difference (After - Before)', fontweight='bold')
+    axes[2].set_xlabel('Predicted')
+    axes[2].set_ylabel('True')
+    
+    for ax in axes:
+        plt.sca(ax)
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+    
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_class_distribution(class_counts: Dict[int, int],
                             class_names: List[str],
-                            filename: str = "accuracy_change"):
-        """Plot accuracy change by class."""
-        n_classes = len(class_names)
-        fig_width = max(10, 6 + n_classes * 0.5)
-        
-        fig, ax = plt.subplots(figsize=(fig_width, 6))
-        
-        changes = [per_class_after[c]['accuracy'] - per_class_before[c]['accuracy'] 
-                  for c in class_names]
-        
-        colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                 for v in changes]
-        
-        bars = ax.bar(class_names, changes, color=colors, alpha=0.8, edgecolor='black')
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-        
-        ax.set_title('Accuracy Change by Class', fontsize=14, fontweight='bold')
-        ax.set_ylabel('Change in Accuracy')
-        ax.grid(axis='y', alpha=0.3)
-        
-        if n_classes > 5:
-            ax.set_xticks(range(len(class_names)))
-            ax.set_xticklabels(class_names, rotation=45, ha='right')
-        
-        # Add value labels
-        for bar, val in zip(bars, changes):
-            height = bar.get_height()
-            va = 'bottom' if height >= 0 else 'top'
-            offset = 3 if height >= 0 else -3
-            ax.annotate(f'{val:+.3f}',
-                       xy=(bar.get_x() + bar.get_width()/2, height),
-                       xytext=(0, offset), textcoords="offset points",
-                       ha='center', va=va, fontsize=10, fontweight='bold')
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
+                            output_path: str,
+                            imbalance_classes: Optional[List[int]] = None,
+                            title: str = "Class Distribution",
+                            formats: List[str] = ['png', 'svg']):
+    """
+    Plot class distribution bar chart.
     
-    def plot_metrics_comparison(self, results_before: Dict, results_after: Dict,
-                               tcav_before: float, tcav_after: float,
-                               filename: str = "metrics_comparison"):
-        """Plot overall metrics comparison."""
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # Bar chart
-        metrics = ['Accuracy', 'Precision', 'Recall', 'F1', 'TCAV']
-        before = [
-            results_before['overall']['accuracy'],
-            results_before['overall']['precision'],
-            results_before['overall']['recall'],
-            results_before['overall']['f1'],
-            tcav_before
+    Args:
+        class_counts: Dictionary mapping class index to count
+        class_names: List of class names
+        output_path: Path to save figure
+        imbalance_classes: Indices of imbalanced classes to highlight
+        title: Figure title
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    
+    indices = sorted(class_counts.keys())
+    counts = [class_counts[i] for i in indices]
+    names = [class_names[i] if i < len(class_names) else f"Class {i}" for i in indices]
+    
+    # Color bars based on imbalance
+    colors = []
+    for i in indices:
+        if imbalance_classes and i in imbalance_classes:
+            colors.append(COLORS['accent4'])
+        else:
+            colors.append(COLORS['primary'])
+    
+    bars = ax.bar(range(len(counts)), counts, color=colors, edgecolor='white', linewidth=1)
+    
+    # Add value labels on bars
+    for bar, count in zip(bars, counts):
+        height = bar.get_height()
+        ax.annotate(f'{count}',
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha='center', va='bottom', fontsize=9)
+    
+    ax.set_xlabel('Class', fontweight='bold')
+    ax.set_ylabel('Number of Samples', fontweight='bold')
+    ax.set_title(title, fontsize=13, fontweight='bold')
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels(names, rotation=45, ha='right')
+    
+    # Add legend for imbalanced classes
+    if imbalance_classes:
+        legend_elements = [
+            mpatches.Patch(facecolor=COLORS['primary'], label='Normal'),
+            mpatches.Patch(facecolor=COLORS['accent4'], label='Imbalanced')
         ]
-        after = [
-            results_after['overall']['accuracy'],
-            results_after['overall']['precision'],
-            results_after['overall']['recall'],
-            results_after['overall']['f1'],
-            tcav_after
-        ]
-        
-        x = np.arange(len(metrics))
-        width = 0.35
-        
-        bars1 = axes[0].bar(x - width/2, before, width, label='Before',
-                           color=self.colors['before'], alpha=0.8)
-        bars2 = axes[0].bar(x + width/2, after, width, label='After',
-                           color=self.colors['after'], alpha=0.8)
-        
-        axes[0].set_title('Metrics Comparison', fontsize=14, fontweight='bold')
-        axes[0].set_xticks(x)
-        axes[0].set_xticklabels(metrics)
-        axes[0].set_ylim(0, 1.1)
-        axes[0].legend()
-        axes[0].grid(axis='y', alpha=0.3)
-        
-        for bar in bars1:
-            axes[0].annotate(f'{bar.get_height():.3f}',
-                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=9)
-        for bar in bars2:
-            axes[0].annotate(f'{bar.get_height():.3f}',
-                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=9)
-        
-        # Change chart
-        changes = [a - b for a, b in zip(after, before)]
-        colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                 for v in changes]
-        
-        bars = axes[1].bar(metrics, changes, color=colors, alpha=0.8, edgecolor='black')
-        axes[1].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-        axes[1].set_title('Metrics Change', fontsize=14, fontweight='bold')
-        axes[1].set_ylabel('Change')
-        axes[1].grid(axis='y', alpha=0.3)
-        
-        for bar, val in zip(bars, changes):
-            height = bar.get_height()
-            va = 'bottom' if height >= 0 else 'top'
-            offset = 3 if height >= 0 else -10
-            axes[1].annotate(f'{val:+.4f}',
-                           xy=(bar.get_x() + bar.get_width()/2, height),
-                           xytext=(0, offset), textcoords="offset points",
-                           ha='center', va=va, fontsize=10, fontweight='bold')
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
+        ax.legend(handles=legend_elements, loc='upper right', frameon=True)
     
-    def plot_class_distribution(self, train_counts: Dict, val_counts: Dict,
-                               filename: str = "class_distribution"):
-        """Plot class distribution for training and validation sets."""
-        class_names = list(train_counts.keys())
-        n_classes = len(class_names)
-        fig_width = max(12, 8 + n_classes * 0.5)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(fig_width, 6))
-        
-        # Training set
-        train_values = [train_counts[c] for c in class_names]
-        colors = [self._get_class_color(i) for i in range(n_classes)]
-        bars = axes[0].bar(class_names, train_values, color=colors, alpha=0.8, edgecolor='black')
-        axes[0].set_title('Training Set Distribution', fontsize=14, fontweight='bold')
-        axes[0].set_ylabel('Number of Samples')
-        axes[0].grid(axis='y', alpha=0.3)
-        
-        if n_classes > 5:
-            axes[0].set_xticks(range(len(class_names)))
-            axes[0].set_xticklabels(class_names, rotation=45, ha='right')
-        
-        for bar in bars:
-            axes[0].annotate(f'{int(bar.get_height())}',
-                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=10)
-        
-        # Validation set
-        val_values = [val_counts.get(c, 0) for c in class_names]
-        bars = axes[1].bar(class_names, val_values, color=colors, alpha=0.8, edgecolor='black')
-        axes[1].set_title('Validation Set Distribution', fontsize=14, fontweight='bold')
-        axes[1].set_ylabel('Number of Samples')
-        axes[1].grid(axis='y', alpha=0.3)
-        
-        if n_classes > 5:
-            axes[1].set_xticks(range(len(class_names)))
-            axes[1].set_xticklabels(class_names, rotation=45, ha='right')
-        
-        for bar in bars:
-            axes[1].annotate(f'{int(bar.get_height())}',
-                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=10)
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(True, axis='y', alpha=0.3)
     
-    def plot_misclassification_analysis(self, misclass_before: Dict, misclass_after: Dict,
-                                        class_names: List[str],
-                                        filename: str = "misclassification_analysis"):
-        """Plot misclassification analysis."""
-        n_classes = len(class_names)
-        fig_width = max(14, 8 + n_classes)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(fig_width, 6))
-        
-        def create_misclass_matrix(misclass_dict):
-            matrix = np.zeros((n_classes, n_classes))
-            for true_class, pred_dict in misclass_dict.items():
-                if true_class in class_names:
-                    true_idx = class_names.index(true_class)
-                    for pred_class, count in pred_dict.items():
-                        if pred_class in class_names:
-                            pred_idx = class_names.index(pred_class)
-                            matrix[true_idx, pred_idx] = count
-            return matrix
-        
-        matrix_before = create_misclass_matrix(misclass_before)
-        matrix_after = create_misclass_matrix(misclass_after)
-        
-        # Before
-        sns.heatmap(matrix_before, annot=True, fmt='.0f', cmap='Reds',
-                   xticklabels=class_names, yticklabels=class_names, ax=axes[0])
-        axes[0].set_title('Misclassifications Before', fontsize=14, fontweight='bold')
-        axes[0].set_xlabel('Predicted As')
-        axes[0].set_ylabel('True Class')
-        
-        # After
-        sns.heatmap(matrix_after, annot=True, fmt='.0f', cmap='Reds',
-                   xticklabels=class_names, yticklabels=class_names, ax=axes[1])
-        axes[1].set_title('Misclassifications After', fontsize=14, fontweight='bold')
-        axes[1].set_xlabel('Predicted As')
-        axes[1].set_ylabel('True Class')
-        
-        if n_classes > 5:
-            for ax in axes:
-                ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
-        
-        # Summary bar chart
-        self._plot_misclassification_summary(misclass_before, misclass_after, class_names)
+    plt.tight_layout()
     
-    def _plot_misclassification_summary(self, misclass_before: Dict, misclass_after: Dict,
-                                        class_names: List[str]):
-        """Plot misclassification summary by class."""
-        n_classes = len(class_names)
-        fig_width = max(10, 6 + n_classes * 0.5)
-        
-        fig, ax = plt.subplots(figsize=(fig_width, 6))
-        
-        before_totals = []
-        after_totals = []
-        
-        for class_name in class_names:
-            before_total = sum(misclass_before.get(class_name, {}).values())
-            after_total = sum(misclass_after.get(class_name, {}).values())
-            before_totals.append(before_total)
-            after_totals.append(after_total)
-        
-        x = np.arange(n_classes)
-        width = 0.35
-        
-        bars1 = ax.bar(x - width/2, before_totals, width, label='Before',
-                      color=self.colors['before'], alpha=0.8)
-        bars2 = ax.bar(x + width/2, after_totals, width, label='After',
-                      color=self.colors['after'], alpha=0.8)
-        
-        ax.set_title('Total Misclassifications by Class', fontsize=14, fontweight='bold')
-        ax.set_xticks(x)
-        ax.set_xticklabels(class_names, rotation=45 if n_classes > 5 else 0, ha='right')
-        ax.set_ylabel('Number of Misclassifications')
-        ax.legend()
-        ax.grid(axis='y', alpha=0.3)
-        
-        plt.tight_layout()
-        self._save_figure(fig, 'misclassification_summary')
+    save_figure(fig, output_path, formats)
+
+
+def plot_per_class_accuracy(accuracy_before: Dict[int, float],
+                            accuracy_after: Dict[int, float],
+                            class_names: List[str],
+                            output_path: str,
+                            imbalance_classes: Optional[List[int]] = None,
+                            formats: List[str] = ['png', 'svg']):
+    """
+    Plot per-class accuracy comparison.
     
-    def plot_experiment3_tcav_comparison(self, tcav_before: Dict, tcav_after: Dict,
-                                         class_layer_map: Dict,
-                                         filename: str = "experiment3_tcav"):
-        """Plot Experiment 3 specific TCAV comparison."""
-        class_names = list(class_layer_map.keys())
-        n_classes = len(class_names)
-        fig_width = max(14, 8 + n_classes)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(fig_width, 6))
-        
-        x = np.arange(n_classes)
-        width = 0.35
-        
-        before_vals = [tcav_before.get(c, 0) for c in class_names]
-        after_vals = [tcav_after.get(c, 0) for c in class_names]
-        
-        bars1 = axes[0].bar(x - width/2, before_vals, width, label='Before',
-                           color=self.colors['before'], alpha=0.8)
-        bars2 = axes[0].bar(x + width/2, after_vals, width, label='After',
-                           color=self.colors['after'], alpha=0.8)
-        
-        for bar in bars1:
-            axes[0].annotate(f'{bar.get_height():.3f}',
-                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=9)
-        for bar in bars2:
-            axes[0].annotate(f'{bar.get_height():.3f}',
-                           xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
-                           xytext=(0, 3), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=9)
-        
-        axes[0].set_title('Per-Class TCAV Scores', fontsize=14, fontweight='bold')
-        axes[0].set_xticks(x)
-        axes[0].set_xticklabels(class_names, rotation=45 if n_classes > 5 else 0, ha='right')
-        axes[0].set_ylim(0, 1.1)
-        axes[0].legend()
-        axes[0].grid(axis='y', alpha=0.3)
-        
-        # Change chart
-        changes = [tcav_after.get(c, 0) - tcav_before.get(c, 0) for c in class_names]
-        colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                 for v in changes]
-        
-        bars = axes[1].bar(class_names, changes, color=colors, alpha=0.8, edgecolor='black')
-        axes[1].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-        axes[1].set_title('TCAV Score Change', fontsize=14, fontweight='bold')
-        axes[1].set_ylabel('Change')
-        axes[1].grid(axis='y', alpha=0.3)
-        
-        if n_classes > 5:
-            axes[1].set_xticks(range(len(class_names)))
-            axes[1].set_xticklabels(class_names, rotation=45, ha='right')
-        
-        for bar, val in zip(bars, changes):
-            height = bar.get_height()
-            va = 'bottom' if height >= 0 else 'top'
-            offset = 3 if height >= 0 else -3
-            axes[1].annotate(f'{val:+.4f}',
-                           xy=(bar.get_x() + bar.get_width()/2, height),
-                           xytext=(0, offset), textcoords="offset points",
-                           ha='center', va=va, fontsize=10, fontweight='bold')
-        
-        plt.tight_layout()
-        self._save_figure(fig, filename)
-        
-        # Class-Layer assignment table
-        self._plot_class_layer_assignments(tcav_before, tcav_after, class_layer_map)
+    Args:
+        accuracy_before: Accuracy per class before recalibration
+        accuracy_after: Accuracy per class after recalibration
+        class_names: List of class names
+        output_path: Path to save figure
+        imbalance_classes: Indices of imbalanced classes
+        formats: Output formats
+    """
+    set_academic_style()
     
-    def _plot_class_layer_assignments(self, tcav_before: Dict, tcav_after: Dict,
-                                      class_layer_map: Dict):
-        """Plot class-layer assignment table."""
-        class_names = list(class_layer_map.keys())
-        n_classes = len(class_names)
-        fig_height = max(4, 2 + n_classes * 0.5)
-        
-        fig, ax = plt.subplots(figsize=(12, fig_height))
-        ax.axis('off')
-        
-        table_data = []
-        headers = ['Class', 'Layer', 'TCAV Before', 'TCAV After', 'Change']
-        
-        for class_name in class_names:
-            layer = class_layer_map[class_name]
-            before = tcav_before.get(class_name, 0)
-            after = tcav_after.get(class_name, 0)
-            change = after - before
-            table_data.append([
-                class_name,
-                layer,
-                f'{before:.4f}',
-                f'{after:.4f}',
-                f'{change:+.4f}'
-            ])
-        
-        table = ax.table(
-            cellText=table_data,
-            colLabels=headers,
-            loc='center',
-            cellLoc='center',
-            colColours=['#3498db'] * 5
-        )
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1.2, 1.5)
-        
-        for i in range(len(headers)):
-            table[(0, i)].set_text_props(color='white', fontweight='bold')
-        
-        ax.set_title('Experiment 3: Class-Layer Assignments', fontsize=14,
-                    fontweight='bold', pad=20)
-        
-        plt.tight_layout()
-        self._save_figure(fig, 'experiment3_assignments')
+    fig, ax = plt.subplots(figsize=(12, 5))
     
-    def create_summary_dashboard(self, all_results: Dict):
-        """Create a comprehensive summary dashboard."""
-        class_names = list(all_results['results_before']['per_class'].keys())
-        n_classes = len(class_names)
+    indices = sorted(accuracy_before.keys())
+    names = [class_names[i] if i < len(class_names) else f"Class {i}" for i in indices]
+    
+    acc_before = [accuracy_before[i] for i in indices]
+    acc_after = [accuracy_after[i] for i in indices]
+    
+    x = np.arange(len(indices))
+    width = 0.35
+    
+    bars1 = ax.bar(x - width/2, acc_before, width, label='Before',
+                   color=COLORS['neutral'], edgecolor='white')
+    bars2 = ax.bar(x + width/2, acc_after, width, label='After',
+                   color=COLORS['secondary'], edgecolor='white')
+    
+    # Highlight imbalanced classes
+    if imbalance_classes:
+        for i, idx in enumerate(indices):
+            if idx in imbalance_classes:
+                bars1[i].set_color(COLORS['accent4'])
+                bars1[i].set_alpha(0.6)
+                bars2[i].set_color(COLORS['positive'])
+    
+    ax.set_xlabel('Class', fontweight='bold')
+    ax.set_ylabel('Accuracy', fontweight='bold')
+    ax.set_title('Per-Class Accuracy Comparison', fontsize=13, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=45, ha='right')
+    ax.set_ylim([0, 1.1])
+    ax.legend(loc='upper right', frameon=True)
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(True, axis='y', alpha=0.3)
+    
+    # Add improvement annotations
+    for i, (b, a) in enumerate(zip(acc_before, acc_after)):
+        diff = a - b
+        color = COLORS['positive'] if diff > 0 else COLORS['negative']
+        sign = '+' if diff > 0 else ''
+        ax.annotate(f'{sign}{diff:.2f}',
+                    xy=(x[i] + width/2, a),
+                    xytext=(0, 5),
+                    textcoords="offset points",
+                    ha='center', va='bottom', fontsize=8,
+                    color=color, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_tcav_scores(tcav_before: Dict[int, float],
+                     tcav_after: Dict[int, float],
+                     class_names: List[str],
+                     output_path: str,
+                     formats: List[str] = ['png', 'svg']):
+    """
+    Plot TCAV score comparison.
+    
+    Args:
+        tcav_before: TCAV scores per class before recalibration
+        tcav_after: TCAV scores per class after recalibration
+        class_names: List of class names
+        output_path: Path to save figure
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    fig, ax = plt.subplots(figsize=(12, 5))
+    
+    indices = sorted(tcav_before.keys())
+    names = [class_names[i] if i < len(class_names) else f"Class {i}" for i in indices]
+    
+    scores_before = [tcav_before[i] for i in indices]
+    scores_after = [tcav_after[i] for i in indices]
+    
+    x = np.arange(len(indices))
+    width = 0.35
+    
+    bars1 = ax.bar(x - width/2, scores_before, width, label='Before',
+                   color=COLORS['neutral'], edgecolor='white')
+    bars2 = ax.bar(x + width/2, scores_after, width, label='After',
+                   color=COLORS['accent1'], edgecolor='white')
+    
+    ax.set_xlabel('Class', fontweight='bold')
+    ax.set_ylabel('TCAV Score', fontweight='bold')
+    ax.set_title('TCAV Score Comparison (Before vs After Recalibration)', 
+                 fontsize=13, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=45, ha='right')
+    ax.set_ylim([0, 1.1])
+    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Random baseline')
+    ax.legend(loc='upper right', frameon=True)
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(True, axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_correlation_matrix(corr_matrix: np.ndarray,
+                            layer_names: List[str],
+                            output_path: str,
+                            title: str = "Layer Sensitivity Correlation",
+                            formats: List[str] = ['png', 'svg']):
+    """
+    Plot correlation matrix between layers.
+    
+    Args:
+        corr_matrix: Correlation matrix
+        layer_names: List of layer names
+        output_path: Path to save figure
+        title: Figure title
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Create custom diverging colormap
+    cmap = LinearSegmentedColormap.from_list(
+        'correlation', [COLORS['negative'], '#FFFFFF', COLORS['positive']]
+    )
+    
+    # Shorten layer names if too long
+    short_names = [name.replace('features.', 'f').replace('layer', 'L') 
+                   for name in layer_names]
+    
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
+    
+    sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap=cmap,
+                xticklabels=short_names, yticklabels=short_names,
+                ax=ax, center=0, vmin=-1, vmax=1,
+                linewidths=0.5, linecolor='white',
+                annot_kws={'size': 8})
+    
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=15)
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_embedding_space(embeddings: np.ndarray,
+                         labels: np.ndarray,
+                         class_names: List[str],
+                         output_path: str,
+                         title: str = "Embedding Space Visualization",
+                         method: str = "tsne",
+                         formats: List[str] = ['png', 'svg']):
+    """
+    Plot 2D visualization of embedding space.
+    
+    Args:
+        embeddings: Embedding vectors [N, D]
+        labels: Class labels [N]
+        class_names: List of class names
+        output_path: Path to save figure
+        title: Figure title
+        method: Dimensionality reduction method ("tsne" or "pca")
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    from sklearn.manifold import TSNE
+    from sklearn.decomposition import PCA
+    
+    # Reduce dimensionality
+    if method == "tsne":
+        reducer = TSNE(n_components=2, random_state=42, perplexity=30)
+    else:
+        reducer = PCA(n_components=2, random_state=42)
+    
+    coords = reducer.fit_transform(embeddings)
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    unique_labels = np.unique(labels)
+    for i, label in enumerate(unique_labels):
+        mask = labels == label
+        name = class_names[label] if label < len(class_names) else f"Class {label}"
+        color = CLASS_COLORS[i % len(CLASS_COLORS)]
         
-        fig_width = max(20, 16 + n_classes * 0.5)
-        fig = plt.figure(figsize=(fig_width, 16))
-        
-        target_info = all_results.get("target_class", "multiple")
-        fig.suptitle(f'Experiment {all_results["experiment"]} Summary Dashboard\n'
-                    f'Model: {all_results["model_name"]} | Classes: {n_classes}',
-                    fontsize=16, fontweight='bold', y=0.98)
-        
-        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
-        
-        # 1. Key metrics
-        ax1 = fig.add_subplot(gs[0, 0])
-        metrics = ['Accuracy', 'TCAV']
-        before = [all_results['results_before']['overall']['accuracy'],
-                 all_results['tcav_before']]
-        after = [all_results['results_after']['overall']['accuracy'],
-                all_results['tcav_after']]
-        
-        x = np.arange(len(metrics))
-        ax1.bar(x - 0.2, before, 0.4, label='Before', color=self.colors['before'])
-        ax1.bar(x + 0.2, after, 0.4, label='After', color=self.colors['after'])
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(metrics)
-        ax1.set_title('Key Metrics', fontweight='bold')
-        ax1.legend()
-        ax1.set_ylim(0, 1.1)
-        
-        # 2. Class distribution
-        ax2 = fig.add_subplot(gs[0, 1])
-        train_counts = all_results['train_class_counts']
-        colors = [self._get_class_color(i) for i in range(n_classes)]
-        ax2.bar(train_counts.keys(), train_counts.values(), color=colors)
-        ax2.set_title('Training Class Distribution', fontweight='bold')
-        ax2.tick_params(axis='x', rotation=45)
-        
-        # 3. Loss curve
-        ax3 = fig.add_subplot(gs[0, 2])
-        epochs = range(1, all_results['epochs'] + 1)
-        ax3.plot(epochs, all_results['loss_history']['total'], 'b-', label='Total')
-        ax3.plot(epochs, all_results['loss_history']['cls'], 'orange', label='Cls')
-        ax3.plot(epochs, all_results['loss_history']['align'], 'g-', label='Align')
-        ax3.set_title('Loss Curves', fontweight='bold')
-        ax3.legend()
-        ax3.set_xlabel('Epoch')
-        
-        # 4. Per-class accuracy
+        ax.scatter(coords[mask, 0], coords[mask, 1], 
+                   c=color, label=name, alpha=0.7, s=30, edgecolors='white', linewidth=0.5)
+    
+    ax.set_xlabel(f'{method.upper()} Dimension 1', fontweight='bold')
+    ax.set_ylabel(f'{method.upper()} Dimension 2', fontweight='bold')
+    ax.set_title(title, fontsize=13, fontweight='bold')
+    ax.legend(loc='best', frameon=True, ncol=2 if len(unique_labels) > 5 else 1)
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    plt.tight_layout()
+    
+    save_figure(fig, output_path, formats)
+
+
+def plot_experiment_summary(results: Dict,
+                            output_path: str,
+                            formats: List[str] = ['png', 'svg']):
+    """
+    Create a summary dashboard with key metrics.
+    
+    Args:
+        results: Dictionary with experiment results
+        output_path: Path to save figure
+        formats: Output formats
+    """
+    set_academic_style()
+    
+    fig = plt.figure(figsize=(14, 10))
+    
+    # Create grid
+    gs = fig.add_gridspec(3, 3, hspace=0.35, wspace=0.3)
+    
+    # 1. Overall accuracy comparison
+    ax1 = fig.add_subplot(gs[0, 0])
+    metrics = ['Accuracy\nBefore', 'Accuracy\nAfter']
+    values = [results.get('accuracy_before', 0), results.get('accuracy_after', 0)]
+    colors = [COLORS['neutral'], COLORS['secondary']]
+    bars = ax1.bar(metrics, values, color=colors, edgecolor='white')
+    ax1.set_ylim([0, 1])
+    ax1.set_title('Overall Accuracy', fontweight='bold')
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    for bar, val in zip(bars, values):
+        ax1.annotate(f'{val:.3f}', xy=(bar.get_x() + bar.get_width()/2, val),
+                     xytext=(0, 3), textcoords='offset points', ha='center', fontsize=10)
+    
+    # 2. Imbalanced class improvement
+    ax2 = fig.add_subplot(gs[0, 1])
+    if 'imbalance_class_acc_before' in results and 'imbalance_class_acc_after' in results:
+        metrics = ['Before', 'After']
+        values = [results['imbalance_class_acc_before'], results['imbalance_class_acc_after']]
+        colors = [COLORS['accent4'], COLORS['positive']]
+        bars = ax2.bar(metrics, values, color=colors, edgecolor='white')
+        ax2.set_ylim([0, 1])
+        improvement = values[1] - values[0]
+        ax2.set_title(f'Imbalanced Class Acc.\n(Δ = {improvement:+.3f})', fontweight='bold')
+    else:
+        ax2.text(0.5, 0.5, 'N/A', ha='center', va='center', fontsize=14)
+        ax2.set_title('Imbalanced Class Acc.', fontweight='bold')
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    
+    # 3. Training info
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax3.axis('off')
+    info_text = f"""
+    Model: {results.get('model_name', 'N/A')}
+    Dataset: {results.get('dataset_name', 'N/A')}
+    Imbalance Ratio: {results.get('imbalance_ratio', 'N/A')}
+    Alpha (text/vision): {results.get('alpha', 'N/A')}
+    Bottleneck Layers: {results.get('bottleneck_layers', 'N/A')}
+    """
+    ax3.text(0.1, 0.5, info_text, fontsize=10, va='center', 
+             fontfamily='monospace', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+    ax3.set_title('Experiment Configuration', fontweight='bold')
+    
+    # 4. Per-class accuracy (spanning two columns)
+    if 'per_class_acc_before' in results and 'per_class_acc_after' in results:
         ax4 = fig.add_subplot(gs[1, :2])
-        before_acc = [all_results['results_before']['per_class'][c]['accuracy']
-                     for c in class_names]
-        after_acc = [all_results['results_after']['per_class'][c]['accuracy']
-                    for c in class_names]
+        class_names = results.get('class_names', [f'C{i}' for i in range(len(results['per_class_acc_before']))])
+        x = np.arange(len(class_names))
+        width = 0.35
         
-        x = np.arange(n_classes)
-        ax4.bar(x - 0.2, before_acc, 0.4, label='Before', color=self.colors['before'])
-        ax4.bar(x + 0.2, after_acc, 0.4, label='After', color=self.colors['after'])
+        acc_before = list(results['per_class_acc_before'].values())
+        acc_after = list(results['per_class_acc_after'].values())
+        
+        ax4.bar(x - width/2, acc_before, width, label='Before', color=COLORS['neutral'])
+        ax4.bar(x + width/2, acc_after, width, label='After', color=COLORS['secondary'])
         ax4.set_xticks(x)
-        ax4.set_xticklabels(class_names, rotation=45 if n_classes > 5 else 0, ha='right')
+        ax4.set_xticklabels(class_names, rotation=45, ha='right')
+        ax4.set_ylabel('Accuracy')
         ax4.set_title('Per-Class Accuracy', fontweight='bold')
         ax4.legend()
-        ax4.set_ylim(0, 1.1)
-        
-        # 5. Configuration info
+        ax4.spines['top'].set_visible(False)
+        ax4.spines['right'].set_visible(False)
+        ax4.set_ylim([0, 1.1])
+    
+    # 5. TCAV scores
+    if 'tcav_before' in results and 'tcav_after' in results:
         ax5 = fig.add_subplot(gs[1, 2])
-        ax5.axis('off')
+        tcav_before = np.mean(list(results['tcav_before'].values()))
+        tcav_after = np.mean(list(results['tcav_after'].values()))
         
-        layer_info = all_results.get('layer', 'multiple')
-        concept_info = all_results.get('concept', 'multiple')
-        if isinstance(concept_info, dict):
-            concept_info = 'multiple'
-        
-        config_text = (
-            f"Configuration:\n"
-            f"─────────────\n"
-            f"Model: {all_results['model_name']}\n"
-            f"Layer: {layer_info}\n"
-            f"Target: {target_info}\n"
-            f"Concept: {concept_info}\n"
-            f"Lambda: {all_results['lambda_align']}\n"
-            f"Epochs: {all_results['epochs']}\n"
-            f"Imbalance: {all_results.get('imbalance_class', 'None')}\n"
-            f"Ratio: {all_results.get('imbalance_ratio', 1.0):.1%}"
-        )
-        ax5.text(0.1, 0.9, config_text, transform=ax5.transAxes, fontsize=11,
-                verticalalignment='top', fontfamily='monospace',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        # 6. Accuracy changes
+        ax5.bar(['Before', 'After'], [tcav_before, tcav_after],
+                color=[COLORS['neutral'], COLORS['accent1']], edgecolor='white')
+        ax5.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+        ax5.set_ylim([0, 1])
+        ax5.set_title('Avg. TCAV Score', fontweight='bold')
+        ax5.spines['top'].set_visible(False)
+        ax5.spines['right'].set_visible(False)
+    
+    # 6. Training curves (spanning bottom)
+    if 'train_history' in results:
         ax6 = fig.add_subplot(gs[2, :])
-        changes = {c: after_acc[i] - before_acc[i] for i, c in enumerate(class_names)}
-        colors = [self.colors['change_pos'] if v >= 0 else self.colors['change_neg']
-                 for v in changes.values()]
-        bars = ax6.bar(changes.keys(), changes.values(), color=colors)
-        ax6.axhline(y=0, color='black', linewidth=0.5)
-        ax6.set_title('Accuracy Change by Class', fontweight='bold')
-        ax6.set_ylabel('Change')
+        history = results['train_history']
+        epochs = range(1, len(history['train_loss']) + 1)
         
-        if n_classes > 5:
-            ax6.set_xticks(range(len(class_names)))
-            ax6.set_xticklabels(list(changes.keys()), rotation=45, ha='right')
+        ax6.plot(epochs, history['train_loss'], '-', color=COLORS['primary'],
+                 linewidth=2, label='Train Loss')
+        if 'val_accuracy' in history:
+            ax6_twin = ax6.twinx()
+            ax6_twin.plot(epochs, history['val_accuracy'], '--', color=COLORS['secondary'],
+                         linewidth=2, label='Val Acc')
+            ax6_twin.set_ylabel('Accuracy', color=COLORS['secondary'])
+            ax6_twin.tick_params(axis='y', labelcolor=COLORS['secondary'])
+            ax6_twin.set_ylim([0, 1])
         
-        for bar, val in zip(bars, changes.values()):
-            height = bar.get_height()
-            ax6.annotate(f'{val:+.3f}',
-                        xy=(bar.get_x() + bar.get_width()/2, height),
-                        xytext=(0, 3 if height >= 0 else -10),
-                        textcoords="offset points",
-                        ha='center', fontweight='bold')
+        ax6.set_xlabel('Epoch')
+        ax6.set_ylabel('Loss', color=COLORS['primary'])
+        ax6.tick_params(axis='y', labelcolor=COLORS['primary'])
+        ax6.set_title('Training Progress', fontweight='bold')
+        ax6.spines['top'].set_visible(False)
         
-        self._save_figure(fig, 'summary_dashboard')
+        # Combined legend
+        lines1, labels1 = ax6.get_legend_handles_labels()
+        if 'val_accuracy' in history:
+            lines2, labels2 = ax6_twin.get_legend_handles_labels()
+            ax6.legend(lines1 + lines2, labels1 + labels2, loc='center right')
+        else:
+            ax6.legend()
+    
+    fig.suptitle('VL-CAV Recalibration Experiment Summary', fontsize=16, fontweight='bold', y=0.98)
+    
+    save_figure(fig, output_path, formats)

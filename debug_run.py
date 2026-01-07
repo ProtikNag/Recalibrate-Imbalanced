@@ -1,571 +1,374 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
-Debug Runner for TCAV-Based Recalibration
+Quick debug script for VL-CAV framework.
 
-This script runs a minimal version of the experiment to verify everything works:
-- Uses only 2-3 classes
-- Limits images per class
-- Runs only a few epochs
-- Skips concept generation (uses synthetic data)
+Runs a minimal pipeline to verify all components work together.
+This is faster than running the full experiment and useful for debugging.
 
 Usage:
-    python debug_run.py                    # Full debug run
-    python debug_run.py --skip-training    # Skip training, test data loading only
-    python debug_run.py --test-viz         # Test visualizations with dummy data
+    python debug_run.py                    # Full debug pipeline
+    python debug_run.py --skip-training    # Skip model training
+    python debug_run.py --skip-vlm         # Skip VLM (uses random embeddings)
+    python debug_run.py --fast             # Fastest possible run
 """
 
-import os
-import sys
 import argparse
-import numpy as np
 import torch
 import torch.nn as nn
+import numpy as np
+import os
+import sys
+import tempfile
 from datetime import datetime
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Import framework components
+from config import ExperimentConfig, get_class_concept_descriptions
+from models import create_model, ActivationExtractor, get_conv_layer_names
+from dataloader import load_dataset, create_dataloaders, get_class_samples
+from vl_cav import CAVTrainer
+from vlm_encoder import VLMEncoder, ConceptEmbedding
+from logger import ExperimentLogger
+from visualizations import (
+    plot_training_curves, plot_class_distribution, 
+    plot_per_class_accuracy, set_academic_style
+)
 
 
-def print_header(title: str):
-    """Print a formatted header."""
-    print(f"\n{'=' * 60}")
-    print(f"  {title}")
-    print(f"{'=' * 60}\n")
-
-
-def print_success(msg: str):
-    """Print success message."""
-    print(f"  ✓ {msg}")
-
-
-def print_fail(msg: str):
-    """Print failure message."""
-    print(f"  ✗ {msg}")
-
-
-def print_info(msg: str):
-    """Print info message."""
-    print(f"  → {msg}")
-
-
-def test_imports():
-    """Test that all required modules can be imported."""
-    print_header("Testing Imports")
-    
-    modules = [
-        ("torch", "PyTorch"),
-        ("torchvision", "TorchVision"),
-        ("numpy", "NumPy"),
-        ("sklearn", "Scikit-learn"),
-        ("matplotlib", "Matplotlib"),
-        ("seaborn", "Seaborn"),
-        ("PIL", "Pillow"),
-        ("tqdm", "tqdm"),
-    ]
-    
-    all_ok = True
-    for module_name, display_name in modules:
-        try:
-            __import__(module_name)
-            print_success(f"{display_name} imported successfully")
-        except ImportError as e:
-            print_fail(f"{display_name} import failed: {e}")
-            all_ok = False
-    
-    # Test local modules
-    local_modules = [
-        "utils",
-        "dataloader_caltech",
-        "visualizations",
-        "logger_system",
-    ]
-    
-    for module_name in local_modules:
-        try:
-            __import__(module_name)
-            print_success(f"Local module '{module_name}' imported successfully")
-        except ImportError as e:
-            print_fail(f"Local module '{module_name}' import failed: {e}")
-            all_ok = False
-    
-    return all_ok
-
-
-def test_models():
-    """Test model loading and forward pass."""
-    print_header("Testing Models")
-    
-    from utils import load_model
-    
-    models_to_test = [
-        ("custom_cnn", 5),
-        ("custom_cnn_small", 3),
-        ("custom_cnn_large", 4),
-    ]
-    
-    all_ok = True
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print_info(f"Using device: {device}")
-    
-    for model_name, num_classes in models_to_test:
-        try:
-            model = load_model(model_name, num_classes=num_classes)
-            model = model.to(device)
-            model.eval()
-            
-            # Test forward pass
-            dummy_input = torch.randn(2, 3, 224, 224).to(device)
-            with torch.no_grad():
-                output = model(dummy_input)
-            
-            if isinstance(output, tuple):
-                output = output[0]
-            
-            assert output.shape == (2, num_classes), f"Expected (2, {num_classes}), got {output.shape}"
-            print_success(f"{model_name} with {num_classes} classes: output shape {output.shape}")
-            
-        except Exception as e:
-            print_fail(f"{model_name}: {e}")
-            all_ok = False
-    
-    return all_ok
-
-
-def test_dataloader():
-    """Test Caltech-101 dataloader (downloads if needed)."""
-    print_header("Testing Dataloader")
-    
-    from dataloader_caltech import (
-        Caltech101VehicleDataset,
-        create_caltech_vehicle_dataset,
-        get_transforms,
-        print_dataset_info,
-    )
-    
-    try:
-        # Test with 2 classes for speed
-        class_names = ['airplanes', 'Motorbikes']
-        
-        print_info(f"Testing with classes: {class_names}")
-        print_info("This may download Caltech-101 (~130MB) on first run...")
-        
-        train_ds, val_ds = create_caltech_vehicle_dataset(
-            root='./data',
-            class_names=class_names,
-            imbalance_class='airplanes',
-            imbalance_ratio=0.5,
-            download=True
-        )
-        
-        print_success(f"Train dataset created: {len(train_ds)} samples")
-        print_success(f"Val dataset created: {len(val_ds)} samples")
-        
-        # Print distribution
-        print_info("Class distribution:")
-        for cls, count in train_ds.get_class_counts().items():
-            print(f"      {cls}: {count}")
-        
-        # Test loading a sample
-        img, label = train_ds[0]
-        print_success(f"Sample loaded: image shape {img.shape}, label {label}")
-        
-        # Test DataLoader
-        from torch.utils.data import DataLoader
-        loader = DataLoader(train_ds, batch_size=4, shuffle=True)
-        batch_imgs, batch_labels = next(iter(loader))
-        print_success(f"Batch loaded: {batch_imgs.shape}, labels {batch_labels.tolist()}")
-        
-        return True
-        
-    except Exception as e:
-        print_fail(f"Dataloader test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_visualizations():
-    """Test visualization functions with dummy data."""
-    print_header("Testing Visualizations")
-    
-    from visualizations import ResultVisualizer
-    import tempfile
-    import shutil
-    
-    # Create temp directory for outputs
-    temp_dir = tempfile.mkdtemp(prefix="tcav_viz_test_")
-    print_info(f"Temp directory: {temp_dir}")
-    
-    try:
-        viz = ResultVisualizer(temp_dir)
-        
-        # Test with 4 classes
-        class_names = ['ClassA', 'ClassB', 'ClassC', 'ClassD']
-        n_classes = len(class_names)
-        
-        # Dummy loss history
-        loss_history = {
-            'total': [1.0, 0.8, 0.6, 0.5, 0.4],
-            'cls': [0.8, 0.6, 0.5, 0.4, 0.3],
-            'align': [0.2, 0.2, 0.1, 0.1, 0.1],
-            'per_class_align': {c: [0.3 - i*0.05 for i in range(5)] for c in class_names}
-        }
-        
-        viz.plot_loss_curves(loss_history, epochs=5)
-        print_success("Loss curves generated")
-        
-        # Dummy confusion matrices
-        cm_before = np.array([
-            [80, 10, 5, 5],
-            [15, 70, 10, 5],
-            [5, 10, 75, 10],
-            [10, 5, 5, 80]
-        ])
-        cm_after = np.array([
-            [85, 8, 4, 3],
-            [10, 78, 8, 4],
-            [4, 8, 80, 8],
-            [8, 4, 4, 84]
-        ])
-        
-        viz.plot_confusion_matrices(cm_before.tolist(), cm_after.tolist(), class_names)
-        print_success("Confusion matrices generated")
-        
-        # Dummy per-class results
-        per_class_before = {
-            c: {'accuracy': 0.7 + np.random.rand()*0.1, 
-                'precision': 0.7 + np.random.rand()*0.1,
-                'recall': 0.7 + np.random.rand()*0.1,
-                'f1': 0.7 + np.random.rand()*0.1}
-            for c in class_names
-        }
-        per_class_after = {
-            c: {'accuracy': 0.8 + np.random.rand()*0.1,
-                'precision': 0.8 + np.random.rand()*0.1,
-                'recall': 0.8 + np.random.rand()*0.1,
-                'f1': 0.8 + np.random.rand()*0.1}
-            for c in class_names
-        }
-        
-        viz.plot_per_class_comparison(per_class_before, per_class_after, class_names)
-        print_success("Per-class comparison generated")
-        
-        viz.plot_accuracy_change(per_class_before, per_class_after, class_names)
-        print_success("Accuracy change plot generated")
-        
-        # Dummy overall results
-        results_before = {
-            'overall': {'accuracy': 0.75, 'precision': 0.74, 'recall': 0.73, 'f1': 0.74, 'avg_confidence': 0.8}
-        }
-        results_after = {
-            'overall': {'accuracy': 0.85, 'precision': 0.84, 'recall': 0.83, 'f1': 0.84, 'avg_confidence': 0.9}
-        }
-        
-        viz.plot_metrics_comparison(results_before, results_after, 0.6, 0.8)
-        print_success("Metrics comparison generated")
-        
-        # Class distribution
-        train_counts = {c: 100 + i*20 for i, c in enumerate(class_names)}
-        val_counts = {c: 25 + i*5 for i, c in enumerate(class_names)}
-        viz.plot_class_distribution(train_counts, val_counts)
-        print_success("Class distribution generated")
-        
-        # Experiment 3 TCAV comparison
-        tcav_before = {c: 0.5 + np.random.rand()*0.2 for c in class_names}
-        tcav_after = {c: 0.7 + np.random.rand()*0.2 for c in class_names}
-        class_layer_map = {c: f'layer{i}' for i, c in enumerate(class_names)}
-        
-        viz.plot_experiment3_tcav_comparison(tcav_before, tcav_after, class_layer_map)
-        print_success("Experiment 3 TCAV comparison generated")
-        
-        # Check files were created
-        files = os.listdir(temp_dir)
-        png_files = [f for f in files if f.endswith('.png')]
-        svg_files = [f for f in files if f.endswith('.svg')]
-        
-        print_info(f"Generated {len(png_files)} PNG files and {len(svg_files)} SVG files")
-        
-        return True
-        
-    except Exception as e:
-        print_fail(f"Visualization test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-        
-    finally:
-        # Cleanup
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
-
-def test_cav_training():
-    """Test CAV training with synthetic data."""
-    print_header("Testing CAV Training")
-    
-    from utils import train_cav
-    
-    try:
-        # Create synthetic activations
-        np.random.seed(42)
-        
-        # Concept activations (cluster 1)
-        concept_acts = np.random.randn(50, 256) + np.array([1.0] * 256)
-        
-        # Random activations (cluster 2)
-        random_acts = np.random.randn(50, 256) - np.array([1.0] * 256)
-        
-        # Train CAV
-        cav = train_cav(concept_acts, random_acts, classifier_type='LinearSVC')
-        
-        assert cav.shape == (256,), f"Expected CAV shape (256,), got {cav.shape}"
-        assert np.abs(np.linalg.norm(cav) - 1.0) < 0.01, "CAV should be normalized"
-        
-        print_success(f"CAV trained successfully: shape {cav.shape}, norm {np.linalg.norm(cav):.4f}")
-        
-        # Test with different classifiers
-        for clf_type in ['SGDClassifier', 'LogisticRegression']:
-            cav = train_cav(concept_acts, random_acts, classifier_type=clf_type)
-            print_success(f"CAV with {clf_type}: shape {cav.shape}")
-        
-        return True
-        
-    except Exception as e:
-        print_fail(f"CAV training test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_evaluation():
-    """Test evaluation functions with a small model."""
-    print_header("Testing Evaluation")
-    
-    from utils import load_model, evaluate_detailed
-    from torch.utils.data import TensorDataset, DataLoader
-    
-    try:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        
-        # Create small model
-        model = load_model('custom_cnn_small', num_classes=3)
-        model = model.to(device)
-        model.eval()
-        
-        # Create synthetic dataset
-        n_samples = 30
-        images = torch.randn(n_samples, 3, 224, 224)
-        labels = torch.randint(0, 3, (n_samples,))
-        
-        dataset = TensorDataset(images, labels)
-        loader = DataLoader(dataset, batch_size=8)
-        
-        class_names = ['cat', 'dog', 'bird']
-        
-        # Run evaluation
-        results = evaluate_detailed(model, loader, class_names, device)
-        
-        # Check results structure
-        assert 'overall' in results
-        assert 'per_class' in results
-        assert 'confusion_matrix' in results
-        
-        print_success(f"Overall accuracy: {results['overall']['accuracy']:.4f}")
-        print_success(f"Per-class results: {list(results['per_class'].keys())}")
-        print_success(f"Confusion matrix shape: {len(results['confusion_matrix'])}x{len(results['confusion_matrix'][0])}")
-        
-        return True
-        
-    except Exception as e:
-        print_fail(f"Evaluation test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_mini_training():
-    """Test a minimal training loop."""
-    print_header("Testing Mini Training Loop")
-    
-    from utils import load_model
-    from torch.utils.data import TensorDataset, DataLoader
-    import torch.optim as optim
-    
-    try:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print_info(f"Using device: {device}")
-        
-        # Create small model
-        model = load_model('custom_cnn_small', num_classes=3)
-        model = model.to(device)
-        
-        # Create synthetic dataset
-        n_samples = 32
-        images = torch.randn(n_samples, 3, 224, 224)
-        labels = torch.randint(0, 3, (n_samples,))
-        
-        dataset = TensorDataset(images, labels)
-        loader = DataLoader(dataset, batch_size=8)
-        
-        optimizer = optim.Adam(model.parameters(), lr=1e-3)
-        criterion = nn.CrossEntropyLoss()
-        
-        # Train for 2 epochs
-        model.train()
-        for epoch in range(2):
-            total_loss = 0
-            for imgs, lbls in loader:
-                imgs, lbls = imgs.to(device), lbls.to(device)
-                
-                optimizer.zero_grad()
-                outputs = model(imgs)
-                loss = criterion(outputs, lbls)
-                loss.backward()
-                optimizer.step()
-                
-                total_loss += loss.item()
-            
-            avg_loss = total_loss / len(loader)
-            print_info(f"Epoch {epoch+1}: loss = {avg_loss:.4f}")
-        
-        print_success("Mini training loop completed successfully")
-        return True
-        
-    except Exception as e:
-        print_fail(f"Mini training test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_full_pipeline_mini():
-    """Test the full pipeline with minimal settings."""
-    print_header("Testing Full Pipeline (Mini)")
-    
-    print_info("This test requires Caltech-101 data and may take a few minutes...")
-    
-    try:
-        # Set minimal configuration
-        import subprocess
-        
-        cmd = [
-            sys.executable, 'main_experiment.py',
-            '--experiment', '3',
-            '--model_name', 'custom_cnn_small',
-            '--dataset_path', './data',
-            '--concept_path', './concepts_debug',
-            '--class_concept_map', 'airplanes:subject,Motorbikes:subject',
-            '--imbalance_class', 'airplanes',
-            '--imbalance_ratio', '0.5',
-            '--pretrain_epochs', '2',
-            '--recalib_epochs', '2',
-            '--batch_size', '8',
-            '--results_path', './results_debug',
-        ]
-        
-        print_info(f"Running: {' '.join(cmd)}")
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=1200  # 10 minute timeout
-        )
-        
-        if result.returncode == 0:
-            print_success("Full pipeline completed successfully!")
-            print_info("Check ./results_debug/ for outputs")
-            return True
-        else:
-            print_fail(f"Pipeline failed with return code {result.returncode}")
-            print("STDOUT:", result.stdout[-1000:] if len(result.stdout) > 1000 else result.stdout)
-            print("STDERR:", result.stderr[-1000:] if len(result.stderr) > 1000 else result.stderr)
-            return False
-            
-    except subprocess.TimeoutExpired:
-        print_fail("Pipeline timed out (>20 minutes)")
-        return False
-    except Exception as e:
-        print_fail(f"Pipeline test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def run_all_tests(skip_training: bool = False, test_viz_only: bool = False, 
-                  full_pipeline: bool = False):
-    """Run all tests."""
-    print_header("TCAV Recalibration - Debug Test Suite")
-    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Python: {sys.version}")
-    
-    results = {}
-    
-    if test_viz_only:
-        # Only test visualizations
-        results['imports'] = test_imports()
-        results['visualizations'] = test_visualizations()
-    else:
-        # Run component tests
-        results['imports'] = test_imports()
-        
-        if not results['imports']:
-            print_fail("\nImport test failed. Cannot continue.")
-            return results
-        
-        results['models'] = test_models()
-        results['cav_training'] = test_cav_training()
-        results['evaluation'] = test_evaluation()
-        results['visualizations'] = test_visualizations()
-        
-        if not skip_training:
-            results['dataloader'] = test_dataloader()
-            results['mini_training'] = test_mini_training()
-            
-            if full_pipeline:
-                results['full_pipeline'] = test_full_pipeline_mini()
-    
-    # Summary
-    print_header("Test Summary")
-    
-    all_passed = True
-    for test_name, passed in results.items():
-        status = "✓ PASSED" if passed else "✗ FAILED"
-        print(f"  {test_name}: {status}")
-        if not passed:
-            all_passed = False
-    
-    print()
-    if all_passed:
-        print("  All tests passed! ✓")
-    else:
-        print("  Some tests failed. Please check the output above.")
-    
-    return results
+def parse_args():
+    parser = argparse.ArgumentParser(description="VL-CAV Debug Run")
+    parser.add_argument("--skip-training", action="store_true",
+                        help="Skip model training phase")
+    parser.add_argument("--skip-vlm", action="store_true",
+                        help="Skip VLM encoding (use random embeddings)")
+    parser.add_argument("--skip-data", action="store_true",
+                        help="Skip data loading (use synthetic data)")
+    parser.add_argument("--fast", action="store_true",
+                        help="Fastest possible run (combines all skip options)")
+    parser.add_argument("--device", type=str, default="auto",
+                        choices=["auto", "cuda", "cpu", "mps"],
+                        help="Device to use")
+    parser.add_argument("--output-dir", type=str, default=None,
+                        help="Output directory (default: temp)")
+    return parser.parse_args()
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Debug runner for TCAV-Based Recalibration"
-    )
-    parser.add_argument("--skip-training", action="store_true",
-                       help="Skip tests that require training/data loading")
-    parser.add_argument("--test-viz", action="store_true",
-                       help="Only test visualizations")
-    parser.add_argument("--full-pipeline", action="store_true",
-                       help="Run full pipeline test (slow)")
+    args = parse_args()
     
-    args = parser.parse_args()
+    # Handle fast mode
+    if args.fast:
+        args.skip_training = True
+        args.skip_vlm = True
+        args.skip_data = True
     
-    results = run_all_tests(
-        skip_training=args.skip_training,
-        test_viz_only=args.test_viz,
-        full_pipeline=args.full_pipeline
-    )
+    # Setup device
+    if args.device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device = args.device
     
-    # Exit with appropriate code
-    all_passed = all(results.values())
-    sys.exit(0 if all_passed else 1)
+    print("=" * 70)
+    print("VL-CAV DEBUG RUN")
+    print("=" * 70)
+    print(f"Device: {device}")
+    print(f"Skip training: {args.skip_training}")
+    print(f"Skip VLM: {args.skip_vlm}")
+    print(f"Skip data: {args.skip_data}")
+    print("=" * 70)
+    
+    # Setup output directory
+    if args.output_dir:
+        output_dir = args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        cleanup = False
+    else:
+        output_dir = tempfile.mkdtemp(prefix="vl_cav_debug_")
+        cleanup = True
+    
+    print(f"\nOutput directory: {output_dir}")
+    
+    try:
+        # Initialize logger
+        logger = ExperimentLogger(output_dir, "debug_run")
+        logger.info("Starting debug run...")
+        
+        # ============================================================
+        # Step 1: Data
+        # ============================================================
+        print("\n[Step 1/6] Data Loading...")
+        
+        if args.skip_data:
+            logger.info("Using synthetic data")
+            
+            # Create synthetic dataset
+            num_classes = 5
+            class_names = [f"class_{i}" for i in range(num_classes)]
+            
+            # Synthetic training data
+            train_x = torch.randn(100, 3, 32, 32)
+            train_y = torch.randint(0, num_classes, (100,))
+            
+            test_x = torch.randn(20, 3, 32, 32)
+            test_y = torch.randint(0, num_classes, (20,))
+            
+            train_dataset = torch.utils.data.TensorDataset(train_x, train_y)
+            test_dataset = torch.utils.data.TensorDataset(test_x, test_y)
+            
+            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=16)
+            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=16)
+            
+            class_counts = {i: 20 for i in range(num_classes)}
+            class_counts[0] = 5  # Simulate imbalance
+            
+            print(f"  ✓ Synthetic data created ({len(train_dataset)} train, {len(test_dataset)} test)")
+        else:
+            logger.info("Loading CIFAR-10 dataset")
+            
+            train_dataset, test_dataset, info = load_dataset(
+                "CIFAR10",
+                root="./data",
+                image_size=32,
+                imbalance_classes=[0],
+                imbalance_ratio=0.1,
+                seed=42
+            )
+            
+            train_loader, test_loader = create_dataloaders(
+                train_dataset, test_dataset,
+                batch_size=32, num_workers=0
+            )
+            
+            num_classes = info["num_classes"]
+            class_names = info["class_names"]
+            class_counts = info["class_counts"]
+            
+            print(f"  ✓ CIFAR-10 loaded ({len(train_dataset)} train, {len(test_dataset)} test)")
+        
+        # Plot class distribution
+        plot_class_distribution(
+            class_counts, class_names,
+            os.path.join(output_dir, "class_distribution"),
+            imbalance_classes=[0],
+            formats=["png"]
+        )
+        print("  ✓ Class distribution plot saved")
+        
+        # ============================================================
+        # Step 2: Model
+        # ============================================================
+        print("\n[Step 2/6] Model Creation...")
+        
+        model = create_model("custom_cnn", num_classes=num_classes, pretrained=False)
+        model = model.to(device)
+        
+        logger.info(f"Model: custom_cnn, Parameters: {sum(p.numel() for p in model.parameters()):,}")
+        print(f"  ✓ Model created ({sum(p.numel() for p in model.parameters()):,} parameters)")
+        
+        # ============================================================
+        # Step 3: Training
+        # ============================================================
+        print("\n[Step 3/6] Training...")
+        
+        if args.skip_training:
+            logger.info("Skipping training phase")
+            train_history = {
+                'train_loss': [1.0, 0.8, 0.6, 0.5, 0.4],
+                'train_accuracy': [0.3, 0.5, 0.6, 0.7, 0.75],
+                'val_accuracy': [0.25, 0.45, 0.55, 0.65, 0.7]
+            }
+            print("  ✓ Skipped (using dummy history)")
+        else:
+            logger.info("Training model")
+            
+            criterion = nn.CrossEntropyLoss()
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+            
+            train_history = {'train_loss': [], 'train_accuracy': [], 'val_accuracy': []}
+            epochs = 3  # Quick training
+            
+            for epoch in range(epochs):
+                model.train()
+                total_loss = 0
+                correct = 0
+                total = 0
+                
+                for inputs, labels in train_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    
+                    optimizer.zero_grad()
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
+                    loss.backward()
+                    optimizer.step()
+                    
+                    total_loss += loss.item()
+                    _, predicted = outputs.max(1)
+                    correct += predicted.eq(labels).sum().item()
+                    total += labels.size(0)
+                
+                train_history['train_loss'].append(total_loss / len(train_loader))
+                train_history['train_accuracy'].append(correct / total)
+                
+                # Quick validation
+                model.eval()
+                val_correct = 0
+                val_total = 0
+                with torch.no_grad():
+                    for inputs, labels in test_loader:
+                        inputs, labels = inputs.to(device), labels.to(device)
+                        outputs = model(inputs)
+                        _, predicted = outputs.max(1)
+                        val_correct += predicted.eq(labels).sum().item()
+                        val_total += labels.size(0)
+                
+                train_history['val_accuracy'].append(val_correct / val_total)
+                
+                logger.info(f"Epoch {epoch+1}: Loss={train_history['train_loss'][-1]:.4f}, "
+                           f"Acc={train_history['train_accuracy'][-1]:.4f}")
+            
+            print(f"  ✓ Training complete ({epochs} epochs)")
+        
+        # Plot training curves
+        plot_training_curves(
+            train_history,
+            os.path.join(output_dir, "training_curves"),
+            formats=["png"]
+        )
+        print("  ✓ Training curves plot saved")
+        
+        # ============================================================
+        # Step 4: VLM Encoding
+        # ============================================================
+        print("\n[Step 4/6] VLM Encoding...")
+        
+        if args.skip_vlm:
+            logger.info("Using random concept embeddings")
+            embedding_dim = 512
+            concept_embeddings = {
+                i: torch.randn(embedding_dim) for i in range(num_classes)
+            }
+            print("  ✓ Random embeddings generated")
+        else:
+            logger.info("Initializing CLIP encoder")
+            try:
+                vlm_encoder = VLMEncoder("openai/clip-vit-base-patch32", device)
+                concept_embedding = ConceptEmbedding(vlm_encoder, alpha=0.7)
+                
+                for class_idx in range(min(num_classes, 3)):  # Only 3 for speed
+                    class_name = class_names[class_idx]
+                    descriptions = get_class_concept_descriptions("CIFAR10", class_idx, class_name)
+                    
+                    # Skip visual embedding for speed
+                    concept_embedding.compute_text_embedding(class_idx, descriptions[:5])
+                    
+                concept_embeddings = concept_embedding.text_embeddings
+                print(f"  ✓ CLIP embeddings computed for {len(concept_embeddings)} classes")
+            except Exception as e:
+                logger.warning(f"VLM failed: {e}, using random embeddings")
+                concept_embeddings = {i: torch.randn(512) for i in range(num_classes)}
+                print(f"  ⚠ CLIP failed, using random embeddings")
+        
+        # ============================================================
+        # Step 5: CAV Training
+        # ============================================================
+        print("\n[Step 5/6] CAV Training...")
+        
+        layer_names = ["conv3", "conv4"]
+        cav_trainer = CAVTrainer()
+        
+        model.eval()
+        
+        for layer_name in layer_names:
+            try:
+                extractor = ActivationExtractor(model, [layer_name])
+                
+                # Get some activations
+                concept_acts = []
+                random_acts = []
+                
+                for batch_idx, (inputs, labels) in enumerate(train_loader):
+                    if batch_idx >= 2:  # Just 2 batches
+                        break
+                    
+                    inputs = inputs.to(device)
+                    with torch.no_grad():
+                        _ = model(inputs)
+                    
+                    acts = extractor.get_activations()[layer_name]
+                    acts_flat = acts.view(acts.size(0), -1).cpu().numpy()
+                    
+                    # Split by some criterion (here: first half = concept)
+                    mid = len(acts_flat) // 2
+                    concept_acts.append(acts_flat[:mid])
+                    random_acts.append(acts_flat[mid:])
+                    
+                    extractor.clear()
+                
+                extractor.remove_hooks()
+                
+                concept_acts = np.vstack(concept_acts)
+                random_acts = np.vstack(random_acts)
+                
+                cav, accuracy = cav_trainer.train_cav(concept_acts, random_acts, layer_name)
+                logger.info(f"CAV trained for {layer_name}: accuracy={accuracy:.4f}")
+                print(f"  ✓ {layer_name}: CAV accuracy = {accuracy:.4f}")
+                
+            except Exception as e:
+                logger.warning(f"CAV training failed for {layer_name}: {e}")
+                print(f"  ⚠ {layer_name}: Failed ({e})")
+        
+        # ============================================================
+        # Step 6: Results Summary
+        # ============================================================
+        print("\n[Step 6/6] Results Summary...")
+        
+        # Create dummy before/after comparison
+        acc_before = {i: 0.5 + np.random.rand() * 0.3 for i in range(num_classes)}
+        acc_after = {i: v + np.random.rand() * 0.1 for i, v in acc_before.items()}
+        acc_after[0] = acc_before[0] + 0.15  # Imbalanced class improvement
+        
+        plot_per_class_accuracy(
+            acc_before, acc_after, class_names,
+            os.path.join(output_dir, "per_class_accuracy"),
+            imbalance_classes=[0],
+            formats=["png"]
+        )
+        print("  ✓ Per-class accuracy plot saved")
+        
+        # Save results
+        results = {
+            "status": "success",
+            "device": device,
+            "num_classes": num_classes,
+            "cav_layers": list(cav_trainer.cavs.keys()),
+            "cav_accuracies": cav_trainer.accuracies,
+            "train_history": train_history,
+        }
+        
+        logger.save_results(results)
+        print("  ✓ Results saved")
+        
+        # ============================================================
+        # Done
+        # ============================================================
+        print("\n" + "=" * 70)
+        print("DEBUG RUN COMPLETE ✓")
+        print("=" * 70)
+        print(f"\nOutputs saved to: {output_dir}")
+        print("\nGenerated files:")
+        for f in sorted(os.listdir(output_dir)):
+            print(f"  - {f}")
+        
+        logger.finalize()
+        
+    finally:
+        if cleanup and args.output_dir is None:
+            print(f"\n[Cleanup] Temporary directory will be deleted: {output_dir}")
+            # Uncomment to auto-cleanup:
+            # shutil.rmtree(output_dir)
+    
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

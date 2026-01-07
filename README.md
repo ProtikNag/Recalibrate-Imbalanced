@@ -1,29 +1,41 @@
-# TCAV-Based Recalibration for Imbalanced Image Classification
+# VL-CAV: VLM-Augmented Concept Activation Vectors
 
-A framework for improving CNN interpretability and correcting class imbalance bias using Testing with Concept Activation Vectors (TCAV).
+A framework for improving CNN interpretability and correcting class imbalance bias using Vision-Language Model (VLM) augmented Concept Activation Vectors.
 
 ## Overview
 
-This project implements a concept-based recalibration framework that:
+This project implements **Idea 1: VLM-Augmented CAVs** from our research on concept-guided neural network recalibration. The core innovation is leveraging rich semantic knowledge from Vision-Language Models (like CLIP) to construct robust concept representations, especially for underrepresented classes.
 
-1. **Creates biased models**: Trains CNNs on imbalanced datasets to simulate real-world bias
-2. **Identifies bottleneck layers**: Automatically selects optimal layers for concept alignment
-3. **Applies TCAV-based recalibration**: Fine-tunes specific layers to align activations with human-defined concepts
-4. **Evaluates improvements**: Measures changes in accuracy, TCAV scores, and interpretability
+### Key Innovation
 
-### Key Features
+Traditional TCAV requires concept images, which are scarce for minority classes. VL-CAV solves this by:
 
-- **Caltech-101 Dataset**: Uses vehicle classes from Caltech-101 with automatic download
-- **Automatic Concept Extraction**: Uses DeepLabV3 segmentation to extract subject/background
-- **N-Class Support**: Works with any number of classes (not limited to 3)
-- **Dynamic Layer Selection**: Automatically selects best layers based on TCAV scores
-- **Comprehensive Visualizations**: Generates PNG and SVG outputs for all metrics
+1. **Textual Concept Generation**: Using LLM-style descriptions to define concepts
+2. **Multimodal Fusion**: Combining text embeddings with limited visual examples
+3. **Cross-Space Projection**: Mapping CNN activations to VLM embedding space
+4. **Targeted Recalibration**: Fine-tuning only bottleneck layers for concept alignment
+
+### Mathematical Foundation
+
+The unified concept embedding combines text and vision:
+
+```
+s̄_k* = α · (1/m) Σⱼ T(tⱼ) + (1-α) · (1/|X_k*|) Σᵢ V(xᵢ)
+```
+
+Where:
+- `T(·)` is the VLM text encoder
+- `V(·)` is the VLM vision encoder  
+- `α` controls text-vision balance (higher = more text, useful when visual examples are scarce)
+- `tⱼ` are textual concept descriptions
+- `xᵢ` are visual examples
 
 ## Installation
 
 ```bash
-# Clone or create project directory
-mkdir tcav_recalibration && cd tcav_recalibration
+# Clone repository
+git clone https://github.com/your-repo/vl-cav-recalibration.git
+cd vl-cav-recalibration
 
 # Create virtual environment
 python -m venv venv
@@ -31,179 +43,163 @@ source venv/bin/activate  # Linux/Mac
 # or: venv\Scripts\activate  # Windows
 
 # Install dependencies
-pip install torch torchvision numpy scikit-learn matplotlib seaborn tqdm pillow
+pip install -r requirements.txt
+
+# Or install manually
+pip install torch torchvision numpy scikit-learn matplotlib seaborn tqdm transformers
 ```
 
 ## Project Structure
 
 ```
-tcav_recalibration/
+vl_cav_recalibration/
 ├── main_experiment.py      # Main experiment runner
-├── concept_generator.py    # DeepLabV3-based concept extraction
-├── dataloader_caltech.py   # Caltech-101 data loading with imbalance support
-├── utils.py                # Models, CAV training, evaluation utilities
-├── visualizations.py       # Result visualization (PNG + SVG)
-├── logger_system.py        # Comprehensive logging
-├── gpu.sh                  # SLURM batch script
+├── config.py               # Configuration management
+├── models.py               # CNN architectures & utilities
+├── vlm_encoder.py          # CLIP encoder & concept embeddings
+├── vl_cav.py               # VL-CAV core algorithms
+├── dataloader.py           # Dataset loading with imbalance support
+├── visualizations.py       # Publication-quality plots
+├── logger.py               # Experiment tracking
+├── debug_run.py            # Quick debug/test script
+├── test_components.py      # Unit tests
+├── requirements.txt        # Dependencies
+├── .gitignore
 ├── README.md               # This file
-├── data/                   # Caltech-101 data (auto-downloaded)
-├── concepts/               # Generated concept images
+├── data/                   # Dataset storage (auto-downloaded)
 └── results/                # Experiment outputs
 ```
 
 ## Quick Start
 
-### 1. Generate Concepts (Optional - Auto-generated on first run)
+### 1. Sanity Check
+
+Verify all components work:
 
 ```bash
-python concept_generator.py \
-    --dataset_path ./data/caltech101/101_ObjectCategories \
-    --output_path ./concepts \
-    --classes "airplanes,Motorbikes,car_side,ferry,helicopter"
+python test_components.py
 ```
 
-### 2. Run Experiment
+### 2. Debug Run
+
+Quick test of the full pipeline:
+
+```bash
+# Full debug (downloads data, trains briefly)
+python debug_run.py --output-dir ./debug_output
+
+# Fast mode (synthetic data, no training)
+python debug_run.py --fast --output-dir ./debug_output
+```
+
+### 3. Run Full Experiment
 
 ```bash
 python main_experiment.py \
-    --experiment 3 \
-    --model_name custom_cnn \
-    --dataset_path ./data \
-    --concept_path ./concepts \
-    --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject,ferry:subject,helicopter:subject" \
-    --imbalance_class airplanes \
+    --experiment_name cifar10_imbalanced \
+    --model_name resnet18 \
+    --dataset_name CIFAR10 \
+    --imbalance_classes "0,1,2" \
     --imbalance_ratio 0.1 \
-    --pretrain_epochs 50 \
-    --recalib_epochs 20
-```
-
-### 3. Run on SLURM Cluster
-
-```bash
-sbatch gpu.sh
+    --alpha 0.7 \
+    --pretrain_epochs 30 \
+    --recalib_epochs 10
 ```
 
 ## Command Line Arguments
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `--experiment` | int | 3 | Experiment type (1, 2, or 3) |
-| `--model_name` | str | custom_cnn | CNN architecture |
-| `--dataset_path` | str | ./data | Root directory for Caltech-101 |
-| `--concept_path` | str | ./concepts | Path to concept images |
-| `--class_concept_map` | str | required | Class:concept pairs (comma-separated) |
-| `--imbalance_class` | str | None | Class to make imbalanced |
-| `--imbalance_ratio` | float | None | Ratio of data to keep (0.05-1.0) |
-| `--pretrain_epochs` | int | 30 | Epochs for initial training |
-| `--recalib_epochs` | int | 10 | Epochs for recalibration |
-| `--lambda_align` | float | 0.5 | Weight for alignment loss |
-| `--batch_size` | int | 32 | Training batch size |
+| `--experiment_name` | str | vl_cav_experiment | Name for the experiment |
+| `--seed` | int | 42 | Random seed for reproducibility |
+| `--model_name` | str | resnet18 | CNN architecture |
+| `--dataset_name` | str | CIFAR10 | Dataset to use |
+| `--imbalance_classes` | str | "" | Comma-separated class indices to imbalance |
+| `--imbalance_ratio` | float | 0.1 | Fraction of samples to keep (0.0-1.0) |
+| `--alpha` | float | 0.7 | Text-vision balance (0=vision, 1=text) |
+| `--vlm_model` | str | openai/clip-vit-base-patch32 | VLM model |
+| `--pretrain_epochs` | int | 30 | Initial training epochs |
+| `--recalib_epochs` | int | 10 | Recalibration epochs |
+| `--lambda_cls` | float | 0.4 | Classification loss weight |
+| `--lambda_align` | float | 0.6 | Alignment loss weight |
+| `--batch_size` | int | 32 | Batch size |
+| `--learning_rate` | float | 1e-3 | Initial learning rate |
+| `--recalib_lr` | float | 1e-4 | Recalibration learning rate |
+| `--device` | str | cuda | Device (cuda/cpu/mps) |
+| `--output_dir` | str | ./results | Output directory |
 | `--pretrained` | flag | False | Use ImageNet pretrained weights |
-| `--seed` | int | 42 | Random seed |
+| `--no_save_models` | flag | False | Don't save model checkpoints |
+| `--no_visualizations` | flag | False | Don't generate plots |
 
 ## Available Models
 
-| Model | Description | Parameters |
-|-------|-------------|------------|
-| `custom_cnn` | Medium custom CNN | ~5M |
-| `custom_cnn_small` | Small custom CNN | ~1M |
-| `custom_cnn_large` | Large custom CNN | ~15M |
-| `vgg16` | VGG-16 | 138M |
+| Model | Description | Params |
+|-------|-------------|--------|
 | `resnet18` | ResNet-18 | 11M |
+| `resnet34` | ResNet-34 | 21M |
 | `resnet50` | ResNet-50 | 25M |
-| `inception_v3` | Inception-V3 | 27M |
-| `mobilenet_v3_small` | MobileNet-V3 Small | 2.5M |
-| `mobilenet_v3_large` | MobileNet-V3 Large | 5.4M |
+| `vgg16` | VGG-16 | 138M |
+| `vgg19` | VGG-19 | 143M |
+| `mobilenet_v3_small` | MobileNetV3-Small | 2.5M |
+| `mobilenet_v3_large` | MobileNetV3-Large | 5.4M |
+| `custom_cnn` | Custom 5-block CNN | ~5M |
 
-## Available Caltech-101 Vehicle Classes
+## Available Datasets
 
-| Class Name | Images | Notes |
-|------------|--------|-------|
-| `airplanes` | ~800 | Commercial aircraft |
-| `Motorbikes` | ~798 | Motorcycles |
-| `car_side` | ~123 | Side view of cars |
-| `ferry` | ~67 | Ferry boats |
-| `helicopter` | ~88 | Helicopters |
-| `schooner` | ~63 | Sailing ships |
-
-## Experiment Types
-
-### Experiment 1: Single-Class Recalibration
-- Focuses on one target class
-- Uses data only from that class for recalibration
-- Best for debugging and understanding single-class behavior
-
-### Experiment 2: Selective Alignment
-- Uses full dataset for classification loss
-- Applies alignment loss only to target class
-- Balances global performance with targeted improvement
-
-### Experiment 3: Joint Multi-Class Optimization (Recommended)
-- Automatically selects best layer for each class
-- Ensures no layer is reused across classes
-- Joint optimization of all alignment losses
-- Best overall results for imbalanced datasets
-
-## Output Structure
-
-```
-results/exp3_custom_cnn_5classes_YYYYMMDD_HHMMSS/
-├── experiment.log              # Detailed text log
-├── experiment_summary.json     # JSON summary
-├── config.json                 # Run configuration
-├── detailed_results.json       # Complete results
-├── model_biased.pth           # Model before recalibration
-├── model_recalibrated_exp3.pth # Model after recalibration
-├── initial_training_loss.png/svg
-├── loss_curves.png/svg
-├── loss_combined.png/svg
-├── loss_per_class_align.png/svg
-├── confusion_matrices.png/svg
-├── confusion_matrix_diff.png/svg
-├── per_class_comparison.png/svg
-├── accuracy_change.png/svg
-├── metrics_comparison.png/svg
-├── class_distribution.png/svg
-├── misclassification_analysis.png/svg
-├── misclassification_summary.png/svg
-├── experiment3_tcav.png/svg
-├── experiment3_assignments.png/svg
-└── summary_dashboard.png/svg
-```
+| Dataset | Classes | Images | Size |
+|---------|---------|--------|------|
+| `CIFAR10` | 10 | 60,000 | 32×32 |
+| `CIFAR100` | 100 | 60,000 | 32×32 |
+| `STL10` | 10 | 13,000 | 96×96 |
+| `FashionMNIST` | 10 | 70,000 | 28×28 |
 
 ## Example Workflows
 
 ### Study Effect of Imbalance Ratio
 
 ```bash
-for ratio in 0.05 0.10 0.15 0.20 0.25 0.50; do
+for ratio in 0.05 0.10 0.15 0.20 0.50; do
     python main_experiment.py \
-        --experiment 3 \
-        --model_name custom_cnn \
-        --dataset_path ./data \
-        --concept_path ./concepts \
-        --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject" \
-        --imbalance_class airplanes \
+        --experiment_name "imbalance_study_${ratio}" \
+        --model_name resnet18 \
+        --dataset_name CIFAR10 \
+        --imbalance_classes "0,1" \
         --imbalance_ratio ${ratio} \
-        --pretrain_epochs 50 \
-        --recalib_epochs 20
+        --alpha 0.7 \
+        --pretrain_epochs 30 \
+        --recalib_epochs 10
+done
+```
+
+### Study Effect of Alpha (Text-Vision Balance)
+
+```bash
+for alpha in 0.3 0.5 0.7 0.9; do
+    python main_experiment.py \
+        --experiment_name "alpha_study_${alpha}" \
+        --model_name resnet18 \
+        --dataset_name CIFAR10 \
+        --imbalance_classes "0" \
+        --imbalance_ratio 0.1 \
+        --alpha ${alpha} \
+        --pretrain_epochs 30 \
+        --recalib_epochs 10
 done
 ```
 
 ### Compare Model Architectures
 
 ```bash
-for model in custom_cnn vgg16 resnet18 mobilenet_v3_small; do
+for model in resnet18 resnet50 vgg16 mobilenet_v3_small custom_cnn; do
     python main_experiment.py \
-        --experiment 3 \
+        --experiment_name "model_study_${model}" \
         --model_name ${model} \
-        --dataset_path ./data \
-        --concept_path ./concepts \
-        --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject" \
-        --imbalance_class airplanes \
+        --dataset_name CIFAR10 \
+        --imbalance_classes "0,1,2" \
         --imbalance_ratio 0.1 \
-        --pretrain_epochs 50 \
-        --recalib_epochs 20
+        --alpha 0.7 \
+        --pretrain_epochs 30 \
+        --recalib_epochs 10
 done
 ```
 
@@ -211,132 +207,148 @@ done
 
 ```bash
 python main_experiment.py \
-    --experiment 3 \
-    --model_name vgg16 \
+    --experiment_name pretrained_exp \
+    --model_name resnet18 \
     --pretrained \
-    --dataset_path ./data \
-    --concept_path ./concepts \
-    --class_concept_map "airplanes:subject,Motorbikes:subject,car_side:subject" \
-    --imbalance_class airplanes \
+    --dataset_name CIFAR10 \
+    --imbalance_classes "0" \
     --imbalance_ratio 0.1 \
     --pretrain_epochs 10 \
     --recalib_epochs 5
 ```
 
-## Concept Generation
-
-The framework automatically generates concept images using DeepLabV3 segmentation on first run. The segmentation model:
-
-1. **Identifies subjects**: Extracts the main object (vehicle) from each image
-2. **Creates subject crops**: Saves cropped subject regions as concept images
-3. **Extracts backgrounds**: Saves background regions as random/negative samples
-
-Manual concept generation:
+### Different VLM Models
 
 ```bash
-python concept_generator.py \
-    --dataset_path ./data/caltech101/101_ObjectCategories \
-    --output_path ./concepts \
-    --classes "airplanes,Motorbikes,car_side,ferry,helicopter" \
-    --max_images 200 \
-    --device cuda
+# Standard CLIP
+python main_experiment.py \
+    --vlm_model openai/clip-vit-base-patch32 \
+    --experiment_name vlm_base
+
+# Larger CLIP
+python main_experiment.py \
+    --vlm_model openai/clip-vit-large-patch14 \
+    --experiment_name vlm_large
 ```
 
-## Results Interpretation
+## Output Structure
 
-### TCAV Score
-- Measures how sensitive model predictions are to human-defined concepts
-- Range: 0-1 (higher = more aligned with concept)
-- Target: Increase after recalibration
-
-### Accuracy Change
-- Per-class accuracy before vs. after recalibration
-- Positive change indicates improvement
-- Watch for trade-offs between classes
-
-### Confusion Matrix
-- Shows classification patterns before/after
-- Look for reduced confusion between similar classes
-- Difference matrix highlights improvements
-
-## Testing & Debugging
-
-### Quick Debug Run
-
-Test that all components work without running a full experiment:
-
-```bash
-# Test imports, models, CAV, visualizations (no data download)
-python debug_run.py --skip-training
-
-# Test everything including data loading
-python debug_run.py
-
-# Only test visualizations
-python debug_run.py --test-viz
-
-# Full pipeline test (slow, runs mini experiment)
-python debug_run.py --full-pipeline
+```
+results/vl_cav_experiment_20260107_143022/
+├── config.json                    # Experiment configuration
+├── experiment.log                 # Detailed text log
+├── results.json                   # Complete results
+├── model_biased.pth               # Model before recalibration
+├── model_recalibrated.pth         # Model after recalibration
+├── class_distribution.png/svg     # Class distribution plot
+├── training_curves.png/svg        # Initial training loss/accuracy
+├── recalibration_losses.png/svg   # Recalibration loss components
+├── confusion_matrices.png/svg     # Before/after confusion matrices
+├── per_class_accuracy.png/svg     # Per-class accuracy comparison
+├── tcav_scores.png/svg            # TCAV score comparison
+└── experiment_summary.png/svg     # Dashboard summary
 ```
 
-### Unit Tests (pytest)
+## Testing
+
+### Quick Sanity Check
 
 ```bash
-# Install pytest
-pip install pytest
+python test_components.py
+```
 
+### Full Test Suite (pytest)
+
+```bash
 # Run all tests
 pytest test_components.py -v
 
 # Run specific test class
 pytest test_components.py -v -k "TestModels"
 
-# Run with coverage
+# Skip slow tests (data downloads)
+pytest test_components.py -v -m "not slow"
+
+# With coverage
 pip install pytest-cov
 pytest test_components.py -v --cov=. --cov-report=html
-
-# Skip slow tests (data download)
-pytest test_components.py -v -m "not slow"
 ```
 
-### Test Categories
+### Debug Pipeline
 
-| Test Class | Tests |
-|------------|-------|
-| `TestModels` | Model creation, forward pass, gradients |
-| `TestCAV` | CAV training with different classifiers |
-| `TestEvaluation` | Metric computation, confusion matrix |
-| `TestVisualizations` | Plot generation, N-class support |
-| `TestDataloader` | Data loading, transforms |
-| `TestLogger` | Logging system functionality |
-| `TestIntegration` | End-to-end component tests |
+```bash
+# Test all components without full training
+python debug_run.py --fast
+
+# Test with real data but minimal training
+python debug_run.py --skip-vlm
+
+# Full debug run
+python debug_run.py --output-dir ./debug_test
+```
+
+## Key Hyperparameters
+
+| Parameter | Range | Effect |
+|-----------|-------|--------|
+| `alpha` | 0.0-1.0 | Higher = rely more on text descriptions |
+| `lambda_cls` | 0.0-1.0 | Classification loss weight |
+| `lambda_align` | 0.0-1.0 | Concept alignment loss weight |
+| `imbalance_ratio` | 0.01-1.0 | Fraction of minority class samples |
+| `recalib_lr` | 1e-5-1e-3 | Recalibration learning rate |
+
+**Recommendations:**
+- For severe imbalance (ratio < 0.1): Use `alpha=0.8-0.9` to leverage text descriptions
+- For moderate imbalance (ratio 0.1-0.3): Use `alpha=0.6-0.7`
+- Balance `lambda_cls` and `lambda_align` to prevent accuracy degradation
+
+## Visualization Gallery
+
+The framework generates publication-quality visualizations:
+
+1. **Class Distribution**: Shows sample counts per class, highlighting imbalanced ones
+2. **Training Curves**: Loss and accuracy during initial training
+3. **Recalibration Losses**: Separate plots for classification and alignment losses
+4. **Confusion Matrices**: Before/after comparison with difference highlighting
+5. **Per-Class Accuracy**: Bar chart comparison showing improvements
+6. **TCAV Scores**: Concept alignment before/after recalibration
+7. **Experiment Summary**: Dashboard combining key metrics
+
+All plots are saved in both PNG (for documents) and SVG (for papers) formats.
 
 ## Troubleshooting
 
 ### CUDA Out of Memory
+
 ```bash
 # Reduce batch size
 --batch_size 16
 
 # Use smaller model
---model_name custom_cnn_small
+--model_name mobilenet_v3_small
+
+# Use CPU
+--device cpu
 ```
 
-### No Concept Images Found
+### VLM/CLIP Issues
+
 ```bash
-# Manually generate concepts first
-python concept_generator.py \
-    --dataset_path ./data/caltech101/101_ObjectCategories \
-    --output_path ./concepts \
-    --classes "your,class,names"
+# Skip VLM (uses random embeddings for testing)
+python debug_run.py --skip-vlm
+
+# Or install transformers
+pip install transformers
 ```
 
-### Class Not Found in Caltech-101
-Check available classes:
-```python
-from torchvision.datasets import Caltech101
-ds = Caltech101(root='./data', download=True)
-print(ds.categories)
+### Slow Data Loading
+
+```bash
+# Reduce workers
+--num_workers 2
+
+# Or use synthetic data for debugging
+python debug_run.py --skip-data
 ```
 
 ## Citation
@@ -344,13 +356,19 @@ print(ds.categories)
 If you use this code, please cite:
 
 ```bibtex
-@article{tcav_recalibration,
-  title={Targeted Layer Recalibration in CNNs: Enhancing Concept Alignment},
+@article{vlcav2026,
+  title={VLM-Augmented Concept Activation Vectors for Neural Network Recalibration},
   author={...},
   journal={...},
-  year={2024}
+  year={2026}
 }
 ```
+
+## Related Work
+
+- Kim et al. (2018). "Interpretability Beyond Feature Attribution: Quantitative Testing with Concept Activation Vectors (TCAV)"
+- Radford et al. (2021). "Learning Transferable Visual Models From Natural Language Supervision (CLIP)"
+- Srikanth et al. (2025). "Targeted Layer Recalibration in CNNs"
 
 ## License
 
